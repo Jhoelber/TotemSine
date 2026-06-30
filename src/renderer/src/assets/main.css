@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+    @layer components{
+    .card{
+        @apply   flex justify-center items-center flex-col  gap-2 h-52  cursor-pointer hover:-translate-y-4 hover:transition
+    }
+    .image{
+        @apply mx-auto h-40
+    }
+    .tamanhoTexto {
+        @apply  text-2xl lg:w-64
+    }
+    }

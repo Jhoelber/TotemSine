@@ -1,0 +1,22 @@
+# archives
+src.zip
+*.zip
+*.rar
+*.7z
+
+# deps / builds
+node_modules/
+dist/
+out/
+build/
+release/
+
+# electron-builder/updater artifacts
+dev-app-update.yml
+latest.yml
+*.blockmap
+
+# env/logs
+.env
+.env.*
+*.log

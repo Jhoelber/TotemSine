@@ -1,0 +1,90 @@
+{
+  "Usuario": [
+    {
+      "id": "1",
+      "nome": "jhoelber",
+      "dataNascimento": "2000-01-15",
+      "telefone": "4332572218",
+      "sexo": "masculino",
+      "senha": "123"
+    },
+    {
+      "id": "2",
+      "nome": "testeDeAlteração2",
+      "dataNascimento": "2024-05-25",
+      "telefone": "2",
+      "sexo": "masculino",
+      "senha": "2"
+    },
+    {
+      "id": "3",
+      "nome": "jhoelber",
+      "dataNascimento": "2000-01-15",
+      "telefone": "4399661929",
+      "sexo": "masculino",
+      "senha": "a"
+    },
+    {
+      "id": "1",
+      "nome": "cadastroUltimaATT",
+      "dataNascimento": "2024-05-15",
+      "telefone": "123456",
+      "sexo": "masculino",
+      "senha": "A"
+    },
+    {
+      "id": "4533dc78-8e95-4bb9-9316-8298bb5dfb8a",
+      "nome": "a",
+      "dataNascimento": "2024-07-03",
+      "telefone": "44",
+      "sexo": "feminino",
+      "senha": "4",
+      "cpf": "4",
+      "cep": "4",
+      "logradouro": "4",
+      "numeroCasa": "4",
+      "complemento": "4",
+      "bairro": "4",
+      "cidade": "4",
+      "estado": "4",
+      "cnpj": "4",
+      "email": "a@hotmail.com"
+    },
+    {
+      "id": "d53e0d6f-182e-418b-beab-49b4989f981e",
+      "nome": "a",
+      "dataNascimento": "2024-07-04",
+      "telefone": "3",
+      "sexo": "masculino",
+      "senha": "3",
+      "cpf": "3",
+      "cep": "3",
+      "logradouro": "3",
+      "numeroCasa": "3",
+      "complemento": "3",
+      "bairro": "3",
+      "cidade": "3",
+      "estado": "3",
+      "cnpj": "3",
+      "email": "a@hotmail.com"
+    },
+    {
+      "id": "3131e837-67d5-4c87-a244-528041cadc70",
+      "nome": "a",
+      "dataNascimento": "2024-07-11",
+      "telefone": "66",
+      "sexo": "feminino",
+      "senha": "4",
+      "cpf": "4",
+      "cep": "4",
+      "logradouro": "4",
+      "numeroCasa": "4",
+      "complemento": "4",
+      "bairro": "4",
+      "cidade": "4",
+      "estado": "4",
+      "cnpj": "4",
+      "email": "a@hotmail.com"
+    }
+  ]
+}
