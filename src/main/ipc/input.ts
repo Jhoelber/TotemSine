@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron'
+import { assertTrustedRendererUrl } from '../security/trustedOrigins'
 
 export function registerInputIpc() {
   ipcMain.handle('totem-insert-text', async (event, text: string) => {
+    assertTrustedRendererUrl(event.senderFrame?.url || '', 'inserir texto')
     const value = String(text ?? '')
     if (!value) return { success: false }
 
@@ -11,6 +13,7 @@ export function registerInputIpc() {
   })
 
   ipcMain.handle('totem-send-key', async (event, keyCode: string) => {
+    assertTrustedRendererUrl(event.senderFrame?.url || '', 'enviar tecla')
     const key = String(keyCode ?? '')
     if (!key) return { success: false }
 
@@ -23,6 +26,7 @@ export function registerInputIpc() {
   ipcMain.handle(
     'totem-type-key',
     async (event, payload: { keyCode?: string; text?: string; isBackspace?: boolean; isEnter?: boolean }) => {
+      assertTrustedRendererUrl(event.senderFrame?.url || '', 'digitar tecla')
       const keyCode = String(payload?.keyCode ?? '')
       const text = String(payload?.text ?? '')
       const isBackspace = !!payload?.isBackspace

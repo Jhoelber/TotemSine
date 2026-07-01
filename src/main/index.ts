@@ -12,7 +12,7 @@ import { registerNavigation } from "./services/navigation";
 import { registerKeyboardAvoidance } from "./services/keyboardAvoidance";
 import { registerWatchdog } from "./services/watchdog";
 import { registerAutoUpdates } from "./services/updates";
-import { START_URL } from "./config/constants";
+import { isTrustedMediaOrigin } from "./security/trustedOrigins";
 
 const isDev = !app.isPackaged;
 
@@ -20,23 +20,12 @@ if (!isDev) {
   app.commandLine.appendSwitch("kiosk-printing");
 }
 
-app.commandLine.appendSwitch("disable-features", "OutOfBlinkCors");
-
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disable-gpu");
 app.commandLine.appendSwitch("disable-gpu-compositing");
 app.commandLine.appendSwitch("use-fake-ui-for-media-stream");
 
 let mainWindow: BrowserWindow | null = null;
-const trustedOrigin = new URL(START_URL).origin;
-
-function isTrustedMediaOrigin(requestingUrl: string) {
-  try {
-    return new URL(requestingUrl).origin === trustedOrigin;
-  } catch {
-    return false;
-  }
-}
 
 function allowMediaPermission(permission: string, requestingUrl: string) {
   const mediaPermissions = new Set(["media", "microphone", "audioCapture"]);
@@ -138,7 +127,7 @@ app.whenReady().then(() => {
     if (isDev) optimizer.watchWindowShortcuts(window);
   });
 
-  registerIpc();
+  registerIpc(() => mainWindow);
 
   // ✅ cria UMA única janela e usa ela pra tudo
   mainWindow = createMainWindow();

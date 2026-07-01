@@ -472,7 +472,12 @@ const NAVIGATION_SCRIPT = `
 
       if (
         normalized === 'ver vagas' ||
-        normalized === 'sim acessar vagas'
+        normalized === 'ver todas as vagas' ||
+        normalized === 'ver vaga' ||
+        normalized === 'sim acessar vagas' ||
+        normalized === 'sim ver vagas' ||
+        normalized === 'sim quero ver vagas' ||
+        normalized === 'quero ver as vagas disponiveis'
       ) {
         return {
           kind: 'internal',
@@ -515,17 +520,71 @@ const NAVIGATION_SCRIPT = `
         };
       }
 
+      if (
+        normalized === 'nao' ||
+        normalized === 'não' ||
+        normalized === 'agora nao' ||
+        normalized === 'agora não' ||
+        normalized === 'nao ver vagas' ||
+        normalized === 'não ver vagas' ||
+        normalized === 'fechar' ||
+        normalized === 'cancelar'
+      ) {
+        return {
+          kind: 'dismiss',
+          title: 'Tudo bem',
+          subtitle: 'Quando quiser, posso ajudar voce a acessar outra area do totem.'
+        };
+      }
+
       return null;
     }
 
     function runAssistantShortcut(action) {
       if (!action) return;
 
+      function forceGoHome() {
+        const startUrl = ${JSON.stringify(START_URL)};
+
+        try {
+          window.location.replace(startUrl);
+        } catch {
+          try {
+            window.location.assign(startUrl);
+          } catch {}
+        }
+
+        window.setTimeout(() => {
+          try {
+            if (window.location.href !== startUrl) {
+              window.location.href = startUrl;
+            }
+          } catch {}
+        }, 250);
+      }
+
+      async function resetToHomeWithFallback() {
+        try {
+          const result = await Promise.race([
+            window.totem && typeof window.totem.resetToHome === 'function'
+              ? window.totem.resetToHome()
+              : Promise.resolve(null),
+            new Promise((resolve) => window.setTimeout(() => resolve(null), 1800))
+          ]);
+
+          if (!result || !result.success) {
+            forceGoHome();
+          }
+        } catch {
+          forceGoHome();
+        }
+      }
+
       const closeButton = document.querySelector('button[aria-label="Fechar assistente"]');
       if (closeButton instanceof HTMLElement) {
         closeButton.click();
       } else if (window.location.hash === '#/assistente') {
-        window.location.replace(${JSON.stringify(START_URL)});
+        void resetToHomeWithFallback();
         return;
       }
 
@@ -546,7 +605,12 @@ const NAVIGATION_SCRIPT = `
         }
 
         if (action.kind === 'home') {
-          window.location.replace(${JSON.stringify(START_URL)});
+          void resetToHomeWithFallback();
+          return;
+        }
+
+        if (action.kind === 'dismiss') {
+          return;
         }
       }, 1000);
     }
@@ -606,9 +670,53 @@ const NAVIGATION_SCRIPT = `
       sairButton.innerText = 'Sair';
       sairButton.style.cssText =
         'background-color:#eee;border:0.5px solid #ccc;border-radius:7px;color:black;gap:10px;margin-right:2em;padding:8px 14px;font-size:12px;';
-      sairButton.addEventListener('click', () => {
+      sairButton.addEventListener('click', async () => {
         const START = ${JSON.stringify(START_URL)};
-        window.location.replace(START);
+        const button = sairButton;
+
+        function forceGoHome() {
+          try {
+            window.location.replace(START);
+          } catch {
+            try {
+              window.location.assign(START);
+            } catch {}
+          }
+
+          window.setTimeout(() => {
+            try {
+              if (window.location.href !== START) {
+                window.location.href = START;
+              }
+            } catch {}
+          }, 250);
+        }
+
+        if (button) {
+          button.style.opacity = '0.7';
+          button.style.pointerEvents = 'none';
+        }
+
+        try {
+          const result = await Promise.race([
+            window.totem && typeof window.totem.resetToHome === 'function'
+              ? window.totem.resetToHome()
+              : Promise.resolve(null),
+            new Promise((resolve) => window.setTimeout(() => resolve(null), 1800))
+          ]);
+
+          if (!result || !result.success) {
+            forceGoHome();
+          }
+        } catch {
+          forceGoHome();
+        } finally {
+          window.setTimeout(() => {
+            if (!button) return;
+            button.style.opacity = '1';
+            button.style.pointerEvents = 'auto';
+          }, 2200);
+        }
       });
       navigationContainer.appendChild(sairButton);
 

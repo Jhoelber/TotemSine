@@ -1,10 +1,16 @@
 import type { BrowserWindow } from 'electron'
-import { shell } from 'electron'
 
 const ALLOWED_HOSTS = new Set([
   'jacarezinho.govbr.cloud',
   'jacarezinho.pr.gov.br',
-  'www.jacarezinho.pr.gov.br'
+  'www.jacarezinho.pr.gov.br',
+  'webapp1-jacarezinho.cidade360.cloud',
+  'solucoes.receita.fazenda.gov.br',
+  'jacarezinhocompramais.com.br',
+  'portalcomprasjacarezinho.portyx.com.br',
+  'duvidas-mei.vercel.app',
+  'totemvoz.vercel.app',
+  'servicos.mte.gov.br'
 ])
 
 const BLOCKED_HOSTS = new Set(['get.adobe.com'])
@@ -245,10 +251,7 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
       return { action: 'deny' }
     }
 
-    if (isHttp(url)) {
-      void shell.openExternal(url).catch(() => {})
-    }
-
+    console.warn('[denied window-open]', url)
     return { action: 'deny' }
   })
 }

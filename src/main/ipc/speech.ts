@@ -1,12 +1,19 @@
 // src/main/ipc/speech.ts
 import { ipcMain } from 'electron'
 import { createSpeechClient } from '../config/speech'
+import { assertTrustedRendererUrl } from '../security/trustedOrigins'
 
 export function registerSpeechIpc() {
-  const { speechClient } = createSpeechClient()
+  const speech = createSpeechClient()
 
-  ipcMain.handle('totem-voz-transcrever', async (_event, audioBase64: string) => {
+  ipcMain.handle('totem-voz-transcrever', async (event, audioBase64: string) => {
     try {
+      assertTrustedRendererUrl(event.senderFrame?.url || '', 'transcrever audio')
+
+      if (!speech.available || !speech.speechClient) {
+        return ''
+      }
+
       let content = audioBase64
       const commaIndex = audioBase64.indexOf(',')
       if (audioBase64.startsWith('data:') && commaIndex !== -1) {
@@ -26,7 +33,7 @@ export function registerSpeechIpc() {
         audio: { content }
       }
 
-      const [response]: any = await speechClient.recognize(request as any)
+      const [response]: any = await speech.speechClient.recognize(request as any)
       const results = response.results ?? []
       if (!results.length) {
         console.log('Speech: nenhuma transcrição retornada.')

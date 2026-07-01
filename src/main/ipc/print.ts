@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { START_URL } from "../config/constants";
+import { isTrustedAppOrigin } from "../security/trustedOrigins";
 import { openPdfInTotemViewer } from "../services/downloads";
 import { getPrinterHealth, printPdfDefault } from "../services/printing";
 
@@ -162,8 +163,12 @@ export function registerPrintIpc() {
     }
   });
 
-  ipcMain.handle("totem-printer-status", async () => {
+  ipcMain.handle("totem-printer-status", async (event) => {
     try {
+      if (!isTrustedAppOrigin(event.senderFrame?.url || "")) {
+        throw new Error("Origem nao autorizada para consultar impressora.");
+      }
+
       return await getPrinterHealth();
     } catch (error) {
       console.error("[printer-status] erro ao consultar impressora:", error);

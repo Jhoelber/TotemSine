@@ -32,6 +32,7 @@ declare global {
         isBackspace?: boolean
         isEnter?: boolean
       }) => Promise<{ success: boolean }>
+      resetToHome?: () => Promise<{ success: boolean; failureReason?: string }>
     }
   }
 }
@@ -49,7 +50,8 @@ const totemApi = {
     text?: string
     isBackspace?: boolean
     isEnter?: boolean
-  }) => ipcRenderer.invoke('totem-type-key', payload)
+  }) => ipcRenderer.invoke('totem-type-key', payload),
+  resetToHome: () => ipcRenderer.invoke('totem-reset-to-home')
 }
 
 if (process.contextIsolated) {

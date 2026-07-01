@@ -10,6 +10,26 @@ const REQUIRED_KEYS = [
   'GOOGLE_CLOUD_PRIVATE_KEY'
 ] as const
 
+function normalizeEscapedText(value: string) {
+  return value
+    .replace(/\\\\r\\\\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\\\r/g, '\r')
+    .replace(/\\r/g, '\r')
+}
+
+function normalizePrivateKey(value: string) {
+  const normalized = normalizeEscapedText(String(value || ''))
+    .trim()
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/^\uFEFF/, '')
+
+  return normalized
+}
+
 function parseEnvFile(content: string) {
   const parsed: Record<string, string> = {}
 
@@ -29,7 +49,7 @@ function parseEnvFile(content: string) {
       value = value.slice(1, -1)
     }
 
-    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r')
+    parsed[key] = normalizeEscapedText(value)
   }
 
   return parsed
@@ -41,7 +61,11 @@ function resolveEnvCandidates() {
   const executableEnv = path.join(path.dirname(process.execPath), '.env')
   const resourcesEnv = path.join(process.resourcesPath, '.env')
 
-  return Array.from(new Set([projectRootEnv, cwdEnv, executableEnv, resourcesEnv]))
+  if (app.isPackaged) {
+    return Array.from(new Set([resourcesEnv, executableEnv]))
+  }
+
+  return Array.from(new Set([projectRootEnv, cwdEnv]))
 }
 
 function loadDotEnv() {
@@ -73,18 +97,40 @@ function getRequiredEnv(name: (typeof REQUIRED_KEYS)[number]) {
 export function createSpeechClient() {
   const isDev = !app.isPackaged
   const envPath = loadDotEnv()
+  try {
+    const projectId = getRequiredEnv('GOOGLE_CLOUD_PROJECT_ID')
+    const clientEmail = getRequiredEnv('GOOGLE_CLOUD_CLIENT_EMAIL')
+    const privateKey = normalizePrivateKey(getRequiredEnv('GOOGLE_CLOUD_PRIVATE_KEY'))
 
-  const projectId = getRequiredEnv('GOOGLE_CLOUD_PROJECT_ID')
-  const clientEmail = getRequiredEnv('GOOGLE_CLOUD_CLIENT_EMAIL')
-  const privateKey = getRequiredEnv('GOOGLE_CLOUD_PRIVATE_KEY')
-
-  const speechClient = new speech.SpeechClient({
-    projectId,
-    credentials: {
-      client_email: clientEmail,
-      private_key: privateKey
+    if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      throw new Error('GOOGLE_CLOUD_PRIVATE_KEY com formato invalido.')
     }
-  })
 
-  return { speechClient, isDev, envPath }
+    const speechClient = new speech.SpeechClient({
+      projectId,
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey
+      }
+    })
+
+    return {
+      speechClient,
+      isDev,
+      envPath,
+      available: true as const
+    }
+  } catch (error) {
+    console.warn(
+      '[speech] credenciais indisponiveis, assistente de voz em modo degradado:',
+      error instanceof Error ? error.message : error
+    )
+
+    return {
+      speechClient: null,
+      isDev,
+      envPath,
+      available: false as const
+    }
+  }
 }

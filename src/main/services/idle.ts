@@ -1,6 +1,7 @@
 // src/main/services/idle.ts
 import type { BrowserWindow } from "electron";
 import { START_URL, TEMPO_INATIVIDADE_MS } from "../config/constants";
+import { resetTotemSession } from "./sessionReset";
 
 const ACTIVITY_MARKER = "__LPX_USER_ACTIVITY__";
 
@@ -10,16 +11,20 @@ export function registerIdle(mainWindow: BrowserWindow) {
 
   function resetTimeout() {
     if (timeoutID) clearTimeout(timeoutID);
-    timeoutID = setTimeout(redirecionarUsuario, TEMPO_INATIVIDADE_MS);
+    timeoutID = setTimeout(() => {
+      void redirecionarUsuario();
+    }, TEMPO_INATIVIDADE_MS);
   }
 
-  function redirecionarUsuario() {
+  async function redirecionarUsuario() {
     try {
       if (mainWindow.isDestroyed()) return;
       if (mainWindow.webContents.isDestroyed()) return;
       if (mainWindow.webContents.getURL() === START_URL) return;
 
-      void mainWindow.loadURL(START_URL).catch((e: { code?: string }) => {
+      await resetTotemSession(mainWindow);
+
+      await mainWindow.loadURL(START_URL).catch((e: { code?: string }) => {
         if (e?.code === "ERR_ABORTED") return;
         console.error("Idle loadURL falhou:", e);
       });
