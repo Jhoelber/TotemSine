@@ -23,6 +23,7 @@ const KEYBOARD_SCRIPT = `
     var bridgeRequestId = 0;
     var bridgeResolvers = Object.create(null);
     var lastKeyboardInteractionAt = 0;
+    var lastExplicitFieldActivationAt = 0;
 
     var LETTER_ROWS = [
       ['1','2','3','4','5','6','7','8','9','0'],
@@ -440,6 +441,23 @@ const KEYBOARD_SCRIPT = `
     function activateField(target, source) {
       if (!isEditable(target)) return;
 
+      var isExplicitActivation =
+        source === 'click-editable' ||
+        source === 'mousedown-editable' ||
+        source === 'mouseup-editable' ||
+        source === 'touchend-editable' ||
+        source === 'pointerup-editable';
+
+      if (isExplicitActivation) {
+        lastExplicitFieldActivationAt = Date.now();
+      }
+
+      if (source === 'focusin' && Date.now() - lastExplicitFieldActivationAt > 1200) {
+        activeField = target;
+        updateDiagnostics(source + '-ignored', describeTarget(target));
+        return;
+      }
+
       activeField = target;
       updateDiagnostics(source, describeTarget(target));
 
@@ -708,8 +726,10 @@ const KEYBOARD_SCRIPT = `
         if (isEditable(current)) {
           activeField = current;
           updateDiagnostics('focusout-keep', describeTarget(current));
-          showKeyboard();
-          keepFieldVisible();
+          if (Date.now() - lastExplicitFieldActivationAt <= 1200) {
+            showKeyboard();
+            keepFieldVisible();
+          }
           return;
         }
 

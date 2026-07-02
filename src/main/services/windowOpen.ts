@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { isGovSensitiveUrl, openGovWindow } from './govWindow'
 
 const ALLOWED_HOSTS = new Set([
   'jacarezinho.govbr.cloud',
@@ -191,6 +192,13 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
   wc[FLAG] = true
 
   mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (isGovSensitiveUrl(url)) {
+      e.preventDefault()
+      console.log('[gov-window] will-navigate interceptado', url)
+      openGovWindow(mainWindow, url)
+      return
+    }
+
     if (isBlocked(url)) {
       e.preventDefault()
       console.log('[blocked will-navigate]', url)
@@ -201,6 +209,13 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
   })
 
   mainWindow.webContents.on('will-redirect', (e, url) => {
+    if (isGovSensitiveUrl(url)) {
+      e.preventDefault()
+      console.log('[gov-window] will-redirect interceptado', url)
+      openGovWindow(mainWindow, url)
+      return
+    }
+
     if (isBlocked(url)) {
       e.preventDefault()
       console.log('[blocked will-redirect]', url)
@@ -217,6 +232,12 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
   patch()
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isGovSensitiveUrl(url)) {
+      console.log('[gov-window] window-open interceptado', url)
+      openGovWindow(mainWindow, url)
+      return { action: 'deny' }
+    }
+
     if (isBlocked(url)) {
       console.log('[blocked window-open]', url)
       return { action: 'deny' }

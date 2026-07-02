@@ -27,6 +27,102 @@ const NAVIGATION_SCRIPT = `
           this._stopped = false;
         }
 
+        async _transcribeAudio(base64, mimeType) {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timeoutId = controller
+            ? window.setTimeout(() => controller.abort(), 15000)
+            : null;
+
+          try {
+            try {
+              const response = await fetch(new URL('/api/speech-to-text', window.location.origin).toString(), {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  audioBase64: base64,
+                  mimeType
+                }),
+                signal: controller ? controller.signal : undefined
+              });
+
+              if (response.ok) {
+                const payload = await response.json();
+                const transcript = typeof payload?.transcript === 'string' ? payload.transcript.trim() : '';
+                if (transcript) {
+                  return transcript;
+                }
+              } else if (response.status === 404) {
+                console.warn('[LPX speech] /api/speech-to-text nao encontrado, usando fallback /api/jobs-voice-assistant');
+
+                const jobsResponse = await fetch('https://vagas.jacarezinho.cloud/api/v1/vagas-semana', {
+                  method: 'GET',
+                  headers: {
+                    Accept: 'application/json'
+                  },
+                  cache: 'no-store',
+                  signal: controller ? controller.signal : undefined
+                });
+
+                if (!jobsResponse.ok) {
+                  throw new Error('Jobs snapshot HTTP ' + jobsResponse.status);
+                }
+
+                const jobsPayload = await jobsResponse.json();
+                const jobs = Array.isArray(jobsPayload?.jobs)
+                  ? jobsPayload.jobs.filter((job) => typeof job === 'string')
+                  : [];
+
+                const fallbackResponse = await fetch(
+                  new URL('/api/jobs-voice-assistant', window.location.origin).toString(),
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      audioBase64: base64,
+                      mimeType,
+                      jobs,
+                      publicationDate: String(jobsPayload?.publicationDate || ''),
+                      updatedAt: String(jobsPayload?.updatedAt || '')
+                    }),
+                    signal: controller ? controller.signal : undefined
+                  }
+                );
+
+                if (!fallbackResponse.ok) {
+                  throw new Error('Voice fallback API HTTP ' + fallbackResponse.status);
+                }
+
+                const fallbackPayload = await fallbackResponse.json();
+                const transcript = typeof fallbackPayload?.transcript === 'string'
+                  ? fallbackPayload.transcript.trim()
+                  : '';
+
+                if (transcript) {
+                  return transcript;
+                }
+              } else {
+                console.warn('[LPX speech] fetch direto falhou:', response.status);
+              }
+            } catch (error) {
+              console.warn('[LPX speech] fetch direto indisponivel, usando fallback bridge:', error);
+            }
+
+            if (window.totemVoz && typeof window.totemVoz.transcrever === 'function') {
+              return String(await window.totemVoz.transcrever(base64) || '').trim();
+            }
+
+            return '';
+          } finally {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
+          }
+        }
+
         async start() {
           if (this._recorder && this._recorder.state === 'recording') return;
 
@@ -77,7 +173,7 @@ const NAVIGATION_SCRIPT = `
 
               try {
                 const base64 = await this._blobToBase64(blob);
-                const transcript = String(await window.totemVoz.transcrever(base64) || '').trim();
+                const transcript = await this._transcribeAudio(base64, recorder.mimeType || 'audio/webm');
 
                 if (!transcript) {
                   this._finishError('no-speech');
