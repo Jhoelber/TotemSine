@@ -426,18 +426,18 @@ export function openGovWindow(parentWindow: BrowserWindow, url: string) {
     return null;
   }
 
+  govShellWindow.showInactive();
+  govContentWindow.show();
+  enforceGovTopmost();
   parentWindow.hide();
+
+  govShellWindow.focus();
+  govContentWindow.focus();
 
   void govContentWindow.loadURL(url).catch((error) => {
     console.error("[gov-window] falha ao abrir:", error);
     closeGovWindow("crash");
   });
-
-  govShellWindow.showInactive();
-  govShellWindow.focus();
-  govContentWindow.show();
-  govContentWindow.focus();
-  enforceGovTopmost();
 
   return govContentWindow;
 }
