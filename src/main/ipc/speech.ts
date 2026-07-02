@@ -1,55 +1,72 @@
-// src/main/ipc/speech.ts
-import { ipcMain } from 'electron'
-import { createSpeechClient } from '../config/speech'
-import { assertTrustedRendererUrl } from '../security/trustedOrigins'
+import { ipcMain } from "electron";
+import { START_URL } from "../config/constants";
+import { assertTrustedRendererUrl } from "../security/trustedOrigins";
+
+const DEFAULT_SPEECH_API_URL = new URL("/api/speech-to-text", START_URL).toString();
+const REQUEST_TIMEOUT_MS = 15000;
+
+function resolveSpeechApiUrl() {
+  const explicitUrl = process.env.TOTEM_SPEECH_API_URL?.trim();
+  return explicitUrl || DEFAULT_SPEECH_API_URL;
+}
+
+async function fetchWithTimeout(input: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export function registerSpeechIpc() {
-  const speech = createSpeechClient()
-
-  ipcMain.handle('totem-voz-transcrever', async (event, audioBase64: string) => {
+  ipcMain.handle("totem-voz-transcrever", async (event, audioBase64: string) => {
     try {
-      assertTrustedRendererUrl(event.senderFrame?.url || '', 'transcrever audio')
+      assertTrustedRendererUrl(event.senderFrame?.url || "", "transcrever audio");
 
-      if (!speech.available || !speech.speechClient) {
-        return ''
+      let content = String(audioBase64 || "").trim();
+      let mimeType = "audio/webm";
+
+      const commaIndex = content.indexOf(",");
+      if (content.startsWith("data:") && commaIndex !== -1) {
+        const meta = content.slice(5, commaIndex);
+        mimeType = meta.split(";")[0] || mimeType;
+        content = content.slice(commaIndex + 1);
       }
 
-      let content = audioBase64
-      const commaIndex = audioBase64.indexOf(',')
-      if (audioBase64.startsWith('data:') && commaIndex !== -1) {
-        content = audioBase64.slice(commaIndex + 1)
+      if (!content) {
+        return "";
       }
 
-      const buffer = Buffer.from(content, 'base64')
-      console.log('Recebi áudio do totem, bytes:', buffer.length)
+      const buffer = Buffer.from(content, "base64");
+      console.log("[speech] audio recebido, bytes:", buffer.length);
 
-      const request: any = {
-        config: {
-          encoding: 'WEBM_OPUS' as any,
-          sampleRateHertz: 48000,
-          languageCode: 'pt-BR',
-          enableAutomaticPunctuation: true
+      const response = await fetchWithTimeout(resolveSpeechApiUrl(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        audio: { content }
+        body: JSON.stringify({
+          audioBase64: content,
+          mimeType,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Speech API HTTP ${response.status}: ${errorText}`);
       }
 
-      const [response]: any = await speech.speechClient.recognize(request as any)
-      const results = response.results ?? []
-      if (!results.length) {
-        console.log('Speech: nenhuma transcrição retornada.')
-        return ''
-      }
-
-      const transcript = results
-        .map((r: any) => r.alternatives?.[0]?.transcript ?? '')
-        .join(' ')
-        .trim()
-
-      console.log('Transcrição:', transcript)
-      return transcript
-    } catch (err) {
-      console.error('Erro ao transcrever com Google Speech:', err)
-      return ''
+      const payload = (await response.json()) as { transcript?: string };
+      return typeof payload?.transcript === "string" ? payload.transcript.trim() : "";
+    } catch (error) {
+      console.error("[speech] erro ao transcrever via API remota:", error);
+      return "";
     }
-  })
+  });
 }

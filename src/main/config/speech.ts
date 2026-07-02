@@ -60,9 +60,10 @@ function resolveEnvCandidates() {
   const cwdEnv = path.join(process.cwd(), '.env')
   const executableEnv = path.join(path.dirname(process.execPath), '.env')
   const resourcesEnv = path.join(process.resourcesPath, '.env')
+  const userDataEnv = path.join(app.getPath('userData'), '.env')
 
   if (app.isPackaged) {
-    return Array.from(new Set([resourcesEnv, executableEnv]))
+    return Array.from(new Set([userDataEnv, executableEnv, resourcesEnv]))
   }
 
   return Array.from(new Set([projectRootEnv, cwdEnv]))
@@ -96,6 +97,7 @@ function getRequiredEnv(name: (typeof REQUIRED_KEYS)[number]) {
 
 export function createSpeechClient() {
   const isDev = !app.isPackaged
+  const checkedPaths = resolveEnvCandidates()
   const envPath = loadDotEnv()
   try {
     const projectId = getRequiredEnv('GOOGLE_CLOUD_PROJECT_ID')
@@ -118,6 +120,7 @@ export function createSpeechClient() {
       speechClient,
       isDev,
       envPath,
+      checkedPaths,
       available: true as const
     }
   } catch (error) {
@@ -130,6 +133,7 @@ export function createSpeechClient() {
       speechClient: null,
       isDev,
       envPath,
+      checkedPaths,
       available: false as const
     }
   }
