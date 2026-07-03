@@ -1,6 +1,6 @@
-import type { BrowserWindow } from "electron";
-import { registerAppIpc } from "./app";
-import { registerGovWindowIpc } from "./govWindow";
+import type { BrowserWindow } from 'electron'
+import { registerAppIpc } from './app'
+import { registerGovWindowIpc } from './govWindow'
 // src/main/ipc/index.ts
 import { registerPingIpc } from './ping'
 import { registerPrintIpc } from './print'

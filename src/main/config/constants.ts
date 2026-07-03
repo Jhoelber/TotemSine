@@ -1,4 +1,3 @@
-
 export const START_URL = 'https://lpxsine.vercel.app/'
 
 export const ALLOWED_URLS_DOWNLOAD_OVERLAY = [

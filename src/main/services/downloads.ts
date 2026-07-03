@@ -639,7 +639,8 @@ async function convertDocToPdf(inputPath: string) {
 
 function showOverlay(mainWindow: BrowserWindow) {
   mainWindow.webContents
-    .insertCSS(`
+    .insertCSS(
+      `
       #loading-overlay {
         position: fixed;
         top: 0;
@@ -666,11 +667,13 @@ function showOverlay(mainWindow: BrowserWindow) {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
-    `)
+    `
+    )
     .catch(() => {})
 
   mainWindow.webContents
-    .executeJavaScript(`
+    .executeJavaScript(
+      `
       if (!document.getElementById('loading-overlay')) {
         const overlay = document.createElement('div');
         overlay.id = 'loading-overlay';
@@ -687,15 +690,18 @@ function showOverlay(mainWindow: BrowserWindow) {
 
         document.body.appendChild(overlay);
       }
-    `)
+    `
+    )
     .catch(() => {})
 }
 
 function removeOverlay(mainWindow: BrowserWindow) {
   mainWindow.webContents
-    .executeJavaScript(`
+    .executeJavaScript(
+      `
       const overlay = document.getElementById('loading-overlay');
       if (overlay) overlay.remove();
-    `)
+    `
+    )
     .catch(() => {})
 }

@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { isGovSensitiveUrl, openGovWindow } from './govWindow'
+import { logSecurityInfo, logSecurityWarn } from './securityLog'
 
 const ALLOWED_HOSTS = new Set([
   'jacarezinho.govbr.cloud',
@@ -197,31 +198,29 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
       try {
         mainWindow.webContents.stop()
       } catch {}
-      console.log('[gov-window] will-navigate interceptado', url)
+      logSecurityInfo('[gov-window] will-navigate interceptado', { url })
       openGovWindow(mainWindow, url)
       return
     }
 
     if (isBlocked(url)) {
       e.preventDefault()
-      console.log('[blocked will-navigate]', url)
+      logSecurityWarn('[window-open] will-navigate bloqueado', { url })
       return
     }
-
-    console.log('[will-navigate]', url)
   })
 
   mainWindow.webContents.on('will-redirect', (e, url) => {
     if (isGovSensitiveUrl(url)) {
       e.preventDefault()
-      console.log('[gov-window] will-redirect interceptado', url)
+      logSecurityInfo('[gov-window] will-redirect interceptado', { url })
       openGovWindow(mainWindow, url)
       return
     }
 
     if (isBlocked(url)) {
       e.preventDefault()
-      console.log('[blocked will-redirect]', url)
+      logSecurityWarn('[window-open] will-redirect bloqueado', { url })
     }
   })
 
@@ -236,18 +235,17 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isGovSensitiveUrl(url)) {
-      console.log('[gov-window] window-open interceptado', url)
+      logSecurityInfo('[gov-window] window-open interceptado', { url })
       openGovWindow(mainWindow, url)
       return { action: 'deny' }
     }
 
     if (isBlocked(url)) {
-      console.log('[blocked window-open]', url)
+      logSecurityWarn('[window-open] popup bloqueado', { url })
       return { action: 'deny' }
     }
 
     const lower = (url || '').toLowerCase()
-    console.log('[window-open]', url)
 
     if (!lower || lower === 'about:blank') {
       return {
@@ -275,7 +273,7 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
       return { action: 'deny' }
     }
 
-    console.warn('[denied window-open]', url)
+    logSecurityWarn('[window-open] popup negado fora da allowlist', { url })
     return { action: 'deny' }
   })
 }

@@ -1,8 +1,9 @@
-import type { BrowserWindow } from "electron";
-import { session } from "electron";
+import type { BrowserWindow } from 'electron'
+import { session } from 'electron'
+import { logSecurityError, logSecurityInfo } from './securityLog'
 
 async function clearRendererStorage(mainWindow: BrowserWindow) {
-  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
 
   await mainWindow.webContents
     .executeJavaScript(
@@ -45,27 +46,33 @@ async function clearRendererStorage(mainWindow: BrowserWindow) {
       `,
       true
     )
-    .catch(() => {});
+    .catch(() => {})
 }
 
 export async function resetTotemSession(mainWindow?: BrowserWindow | null) {
-  if (mainWindow) {
-    await clearRendererStorage(mainWindow);
+  try {
+    if (mainWindow) {
+      await clearRendererStorage(mainWindow)
+    }
+
+    await session.defaultSession.clearStorageData({
+      storages: [
+        'cookies',
+        'localstorage',
+        'indexdb',
+        'serviceworkers',
+        'cachestorage',
+        'filesystem',
+        'shadercache',
+        'websql'
+      ]
+    })
+
+    await session.defaultSession.clearCache()
+    await session.defaultSession.cookies.flushStore()
+    logSecurityInfo('[session-reset] sessao limpa com sucesso')
+  } catch (error) {
+    logSecurityError('[session-reset] falha ao limpar sessao', error)
+    throw error
   }
-
-  await session.defaultSession.clearStorageData({
-    storages: [
-      "cookies",
-      "localstorage",
-      "indexdb",
-      "serviceworkers",
-      "cachestorage",
-      "filesystem",
-      "shadercache",
-      "websql"
-    ]
-  });
-
-  await session.defaultSession.clearCache();
-  await session.defaultSession.cookies.flushStore();
 }

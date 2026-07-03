@@ -1,7 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
-
-const api = {}
 const DEFAULT_SPEECH_API_URL = 'https://lpxsine.vercel.app/api/speech-to-text'
 const DEFAULT_SPEECH_FALLBACK_API_URL = 'https://lpxsine.vercel.app/api/jobs-voice-assistant'
 const JOBS_SNAPSHOT_URL = 'https://vagas.jacarezinho.cloud/api/v1/vagas-semana'
@@ -17,12 +14,31 @@ const TRUSTED_APP_HOSTS = new Set([
   'duvidas-mei.vercel.app',
   'totemvoz.vercel.app'
 ])
-const TRUSTED_KEYBOARD_HOSTS = new Set(['servicos.mte.gov.br', 'sso.acesso.gov.br', 'acesso.gov.br'])
+const TRUSTED_KEYBOARD_HOSTS = new Set([
+  'servicos.mte.gov.br',
+  'sso.acesso.gov.br',
+  'acesso.gov.br'
+])
 const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development'
+
+function getDecodedPathname() {
+  try {
+    return decodeURIComponent(window.location.pathname || '').toLowerCase()
+  } catch {
+    return String(window.location.pathname || '').toLowerCase()
+  }
+}
+
+function isPdfViewerPage() {
+  return (
+    window.location.protocol === 'file:' &&
+    getDecodedPathname().includes('/viewer-cache/pdf-viewer.html')
+  )
+}
 
 function isTrustedAppPage() {
   const { protocol, hostname } = window.location
-  if (protocol === 'file:') return true
+  if (protocol === 'file:') return isPdfViewerPage()
   if (protocol !== 'http:' && protocol !== 'https:') return false
   return TRUSTED_APP_HOSTS.has(hostname.toLowerCase())
 }
@@ -34,6 +50,10 @@ function isTrustedKeyboardPage() {
 
   const normalizedHost = hostname.toLowerCase()
   return TRUSTED_APP_HOSTS.has(normalizedHost) || TRUSTED_KEYBOARD_HOSTS.has(normalizedHost)
+}
+
+function isGovShellPage() {
+  return window.location.protocol === 'data:'
 }
 
 function resolveSpeechApiUrl() {
@@ -82,7 +102,9 @@ async function fetchJobsSnapshot() {
   }
 
   return {
-    jobs: Array.isArray(payload.jobs) ? payload.jobs.filter((job): job is string => typeof job === 'string') : [],
+    jobs: Array.isArray(payload.jobs)
+      ? payload.jobs.filter((job): job is string => typeof job === 'string')
+      : [],
     publicationDate: String(payload.publicationDate || ''),
     updatedAt: String(payload.updatedAt || '')
   }
@@ -125,7 +147,9 @@ async function fetchSpeechTranscript(audioBase64: string) {
         throw new Error(`Speech API HTTP ${response.status}: ${errorText}`)
       }
 
-      console.warn('[preload] /api/speech-to-text nao encontrado, usando fallback /api/jobs-voice-assistant')
+      console.warn(
+        '[preload] /api/speech-to-text nao encontrado, usando fallback /api/jobs-voice-assistant'
+      )
 
       const snapshot = await fetchJobsSnapshot()
       const fallbackResponse = await fetch(resolveSpeechFallbackApiUrl(), {
@@ -149,7 +173,9 @@ async function fetchSpeechTranscript(audioBase64: string) {
       }
 
       const fallbackPayload = (await fallbackResponse.json()) as { transcript?: string }
-      return typeof fallbackPayload?.transcript === 'string' ? fallbackPayload.transcript.trim() : ''
+      return typeof fallbackPayload?.transcript === 'string'
+        ? fallbackPayload.transcript.trim()
+        : ''
     }
 
     const payload = (await response.json()) as { transcript?: string }
@@ -161,13 +187,15 @@ async function fetchSpeechTranscript(audioBase64: string) {
 
 declare global {
   interface Window {
-    electron: typeof electronAPI
-    api: typeof api
     totemVoz?: {
       transcrever: (audioBase64: string) => Promise<string>
     }
     totemGov?: {
-      close: (action?: "back" | "exit") => Promise<{ success: boolean }>
+      close: (action?: 'back' | 'exit') => Promise<{ success: boolean }>
+    }
+    totemGovControls?: {
+      back: () => void
+      exit: () => void
     }
     totem?: {
       printFileSilent?: (
@@ -193,10 +221,7 @@ declare global {
       }) => Promise<{ success: boolean }>
       keyboardShow?: () => Promise<{ success: boolean }>
       keyboardHide?: () => Promise<{ success: boolean }>
-      keyboardAction?: (payload: {
-        kind: string
-        text?: string
-      }) => Promise<{ success: boolean }>
+      keyboardAction?: (payload: { kind: string; text?: string }) => Promise<{ success: boolean }>
       onKeyboardReset?: (callback: () => void) => () => void
       resetToHome?: () => Promise<{ success: boolean; failureReason?: string }>
     }
@@ -291,7 +316,8 @@ function installKeyboardFocusDetector() {
 
   if (globalState.__LPX_PRELOAD_KEYBOARD_DETECTOR__) return
   globalState.__LPX_PRELOAD_KEYBOARD_DETECTOR__ = true
-  const isGovHost = location.hostname === 'sso.acesso.gov.br' || location.hostname === 'acesso.gov.br'
+  const isGovHost =
+    location.hostname === 'sso.acesso.gov.br' || location.hostname === 'acesso.gov.br'
   let suppressGovOutsideClickUntil = 0
 
   const isSuppressedGovOutsideClick = (event: Event) => {
@@ -369,14 +395,25 @@ const keyboardOnlyTotemApi = {
   onKeyboardReset: totemApi.onKeyboardReset
 }
 
+const govControlApi = {
+  back: () => ipcRenderer.send('lpx-gov-control-back'),
+  exit: () => ipcRenderer.send('lpx-gov-control-close')
+}
+
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-    contextBridge.exposeInMainWorld('totem', isTrustedAppPage() ? totemApi : keyboardOnlyTotemApi)
+    if (isTrustedAppPage()) {
+      contextBridge.exposeInMainWorld('totem', totemApi)
+    } else if (isTrustedKeyboardPage()) {
+      contextBridge.exposeInMainWorld('totem', keyboardOnlyTotemApi)
+    }
 
     if (isTrustedAppPage()) {
       contextBridge.exposeInMainWorld('totemGov', totemGovApi)
+    }
+
+    if (isGovShellPage()) {
+      contextBridge.exposeInMainWorld('totemGovControls', govControlApi)
     }
 
     if (isTrustedAppPage()) {
@@ -396,12 +433,18 @@ if (process.contextIsolated) {
     console.error('[preload] erro ao expor APIs:', error)
   }
 } else {
-  window.electron = electronAPI
-  window.api = api
-  window.totem = isTrustedAppPage() ? totemApi : keyboardOnlyTotemApi
+  if (isTrustedAppPage()) {
+    window.totem = totemApi
+  } else if (isTrustedKeyboardPage()) {
+    window.totem = keyboardOnlyTotemApi
+  }
 
   if (isTrustedAppPage()) {
     window.totemGov = totemGovApi
+  }
+
+  if (isGovShellPage()) {
+    window.totemGovControls = govControlApi
   }
 
   if (isTrustedAppPage()) {

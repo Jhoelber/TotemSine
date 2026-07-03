@@ -51,8 +51,30 @@ function composeAccent(accent: '~' | '\u00B4' | '^' | '`', value: string) {
       y: '\u00FD',
       Y: '\u00DD'
     },
-    '^': { a: '\u00E2', A: '\u00C2', e: '\u00EA', E: '\u00CA', i: '\u00EE', I: '\u00CE', o: '\u00F4', O: '\u00D4', u: '\u00FB', U: '\u00DB' },
-    '`': { a: '\u00E0', A: '\u00C0', e: '\u00E8', E: '\u00C8', i: '\u00EC', I: '\u00CC', o: '\u00F2', O: '\u00D2', u: '\u00F9', U: '\u00D9' }
+    '^': {
+      a: '\u00E2',
+      A: '\u00C2',
+      e: '\u00EA',
+      E: '\u00CA',
+      i: '\u00EE',
+      I: '\u00CE',
+      o: '\u00F4',
+      O: '\u00D4',
+      u: '\u00FB',
+      U: '\u00DB'
+    },
+    '`': {
+      a: '\u00E0',
+      A: '\u00C0',
+      e: '\u00E8',
+      E: '\u00C8',
+      i: '\u00EC',
+      I: '\u00CC',
+      o: '\u00F2',
+      O: '\u00D2',
+      u: '\u00F9',
+      U: '\u00D9'
+    }
   }
 
   return composed[accent]?.[value] ?? ''
@@ -233,10 +255,14 @@ export default function KeyboardPage(): JSX.Element {
         </div>
 
         <div className="mt-2 text-center text-[12px] font-semibold tracking-[0.01em] text-white/90">
-          {pendingAccent ? `Acento selecionado: ${pendingAccent}` : 'Toque nas teclas para preencher o campo selecionado'}
+          {pendingAccent
+            ? `Acento selecionado: ${pendingAccent}`
+            : 'Toque nas teclas para preencher o campo selecionado'}
         </div>
 
-        <div className={`mx-auto flex w-full max-w-[1160px] flex-col justify-start ${compactFooter ? 'mt-2' : 'mt-3'}`}>
+        <div
+          className={`mx-auto flex w-full max-w-[1160px] flex-col justify-start ${compactFooter ? 'mt-2' : 'mt-3'}`}
+        >
           {rows.map((row, rowIndex) => (
             <div
               key={`row-${rowIndex}`}
@@ -246,15 +272,22 @@ export default function KeyboardPage(): JSX.Element {
                 const label = labelForKey(key, shiftEnabled, symbolsEnabled)
                 const isToggle = key === 'shift' || key === 'symbols' || key === 'letters'
                 const isBackspace = key === 'backspace'
-                const isActive = (key === 'shift' && shiftEnabled) || (isAccentKey(key) && pendingAccent === key)
+                const isActive =
+                  (key === 'shift' && shiftEnabled) || (isAccentKey(key) && pendingAccent === key)
                 const baseKeyHeight = compactFooter ? 'h-[44px]' : 'h-[50px]'
                 const baseMinWidth = compactFooter ? 'min-w-[90px]' : 'min-w-[100px]'
 
                 const className = [
                   `flex ${baseKeyHeight} ${baseMinWidth} items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,#ffffff_0%,#eef4fb_100%)] px-4 text-[17px] font-semibold text-[#11263a] shadow-[0_8px_20px_rgba(8,27,45,0.10)]`,
-                  isToggle ? `${compactFooter ? 'min-w-[108px] text-[15px]' : 'min-w-[122px] text-[16px]'} text-[#16324c]` : '',
-                  isBackspace ? `${compactFooter ? 'min-w-[112px]' : 'min-w-[126px]'} flex-col gap-0.5 text-[12px] font-medium text-[#16324c]` : '',
-                  isActive ? 'bg-[linear-gradient(180deg,#9cecf4_0%,#75dce8_100%)] text-[#07364e]' : ''
+                  isToggle
+                    ? `${compactFooter ? 'min-w-[108px] text-[15px]' : 'min-w-[122px] text-[16px]'} text-[#16324c]`
+                    : '',
+                  isBackspace
+                    ? `${compactFooter ? 'min-w-[112px]' : 'min-w-[126px]'} flex-col gap-0.5 text-[12px] font-medium text-[#16324c]`
+                    : '',
+                  isActive
+                    ? 'bg-[linear-gradient(180deg,#9cecf4_0%,#75dce8_100%)] text-[#07364e]'
+                    : ''
                 ]
                   .filter(Boolean)
                   .join(' ')
@@ -290,9 +323,7 @@ export default function KeyboardPage(): JSX.Element {
           ))}
         </div>
 
-        <div
-          className="mx-auto mt-2 flex w-full max-w-[1160px] items-center"
-        >
+        <div className="mx-auto mt-2 flex w-full max-w-[1160px] items-center">
           <button
             className={`flex w-full items-center justify-center rounded-[22px] bg-[linear-gradient(180deg,#ffffff_0%,#eef4fb_100%)] font-semibold text-[#11263a] shadow-[0_10px_24px_rgba(8,27,45,0.10)] ${compactFooter ? 'h-[46px] text-[16px]' : 'h-[52px] text-[17px]'}`}
             onClick={() => {

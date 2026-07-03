@@ -1,98 +1,128 @@
-import { BrowserWindow, ipcMain, screen } from "electron";
-import { join } from "path";
-import { START_URL } from "../config/constants";
-import { registerKeyboardAvoidance } from "./keyboardAvoidance";
+import { BrowserWindow, ipcMain, screen } from 'electron'
+import { join } from 'path'
+import { START_URL } from '../config/constants'
+import { registerKeyboardAvoidance } from './keyboardAvoidance'
+import { logSecurityError, logSecurityInfo, logSecurityWarn } from './securityLog'
 
-const GOV_HOSTS = new Set(["servicos.mte.gov.br", "sso.acesso.gov.br", "acesso.gov.br"]);
-const GOV_LOGIN_URL = "https://servicos.mte.gov.br/spme-v2/#/login";
-const TOP_BAR_HEIGHT = 60;
-const CONTROL_BACK_CHANNEL = "lpx-gov-control-back";
-const CONTROL_CLOSE_CHANNEL = "lpx-gov-control-close";
-const GOV_AUTH_SAME_URL_RETRY_LIMIT = 1;
-const GOV_AUTH_SAME_URL_RETRY_WINDOW_MS = 45000;
+const GOV_HOSTS = new Set(['servicos.mte.gov.br', 'sso.acesso.gov.br', 'acesso.gov.br'])
+const GOV_LOGIN_URL = 'https://servicos.mte.gov.br/spme-v2/#/login'
+const TOP_BAR_HEIGHT = 60
+const CONTROL_BACK_CHANNEL = 'lpx-gov-control-back'
+const CONTROL_CLOSE_CHANNEL = 'lpx-gov-control-close'
+const GOV_AUTH_SAME_URL_RETRY_LIMIT = 1
+const GOV_AUTH_SAME_URL_RETRY_WINDOW_MS = 45000
 
-let parentWindowRef: BrowserWindow | null = null;
-let govShellWindow: BrowserWindow | null = null;
-let govContentWindow: BrowserWindow | null = null;
-let controlsIpcRegistered = false;
-let govPartition = "";
-let lastGovUrl = GOV_LOGIN_URL;
-let recovering = false;
-let govShellReady = false;
-let govContentReady = false;
-let lastGovOpenUrl = "";
-let lastGovOpenAt = 0;
-let lastGovAuthCrashKey = "";
-let lastGovAuthCrashAt = 0;
-let lastGovAuthCrashCount = 0;
+let parentWindowRef: BrowserWindow | null = null
+let govShellWindow: BrowserWindow | null = null
+let govContentWindow: BrowserWindow | null = null
+let controlsIpcRegistered = false
+let govPartition = ''
+let lastGovUrl = GOV_LOGIN_URL
+let recovering = false
+let govShellReady = false
+let govContentReady = false
+let lastGovOpenUrl = ''
+let lastGovOpenAt = 0
+let lastGovAuthCrashKey = ''
+let lastGovAuthCrashAt = 0
+let lastGovAuthCrashCount = 0
 
 function enforceGovTopmost() {
   if (govShellWindow && !govShellWindow.isDestroyed()) {
-    govShellWindow.setAlwaysOnTop(true, "screen-saver");
-    govShellWindow.moveTop();
+    govShellWindow.setAlwaysOnTop(true, 'screen-saver')
+    govShellWindow.moveTop()
   }
 
   if (govContentWindow && !govContentWindow.isDestroyed()) {
-    govContentWindow.setAlwaysOnTop(true, "screen-saver");
-    govContentWindow.moveTop();
+    govContentWindow.setAlwaysOnTop(true, 'screen-saver')
+    govContentWindow.moveTop()
   }
 }
 
 function registerControlsIpc() {
-  if (controlsIpcRegistered) return;
-  controlsIpcRegistered = true;
+  if (controlsIpcRegistered) return
+  controlsIpcRegistered = true
 
-  ipcMain.on(CONTROL_BACK_CHANNEL, () => {
-    if (govContentWindow && !govContentWindow.isDestroyed() && govContentWindow.webContents.canGoBack()) {
-      govContentWindow.webContents.goBack();
-      return;
+  ipcMain.on(CONTROL_BACK_CHANNEL, (event) => {
+    if (!govShellWindow || event.sender.id !== govShellWindow.webContents.id) {
+      logSecurityWarn('[gov-window] emissor nao autorizado para voltar', {
+        senderId: event.sender.id
+      })
+      return
     }
 
-    closeGovWindow("back");
-  });
+    if (
+      govContentWindow &&
+      !govContentWindow.isDestroyed() &&
+      govContentWindow.webContents.canGoBack()
+    ) {
+      govContentWindow.webContents.goBack()
+      return
+    }
 
-  ipcMain.on(CONTROL_CLOSE_CHANNEL, () => {
-    closeGovWindow("exit");
-  });
+    closeGovWindow('back')
+  })
+
+  ipcMain.on(CONTROL_CLOSE_CHANNEL, (event) => {
+    if (!govShellWindow || event.sender.id !== govShellWindow.webContents.id) {
+      logSecurityWarn('[gov-window] emissor nao autorizado para fechar', {
+        senderId: event.sender.id
+      })
+      return
+    }
+
+    closeGovWindow('exit')
+  })
 }
 
 function isGovAuthUrl(url: string) {
   try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
-    const pathname = parsed.pathname.toLowerCase();
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.toLowerCase()
+    const pathname = parsed.pathname.toLowerCase()
 
     return (
-      (hostname === "sso.acesso.gov.br" || hostname === "acesso.gov.br") &&
-      (pathname.includes("/login") || pathname.includes("/authorize") || pathname.includes("/logout"))
-    );
+      (hostname === 'sso.acesso.gov.br' || hostname === 'acesso.gov.br') &&
+      (pathname.includes('/login') ||
+        pathname.includes('/authorize') ||
+        pathname.includes('/logout'))
+    )
   } catch {
-    return false;
+    return false
+  }
+}
+
+function isAllowedGovContentUrl(url: string) {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' && GOV_HOSTS.has(parsed.hostname.toLowerCase())
+  } catch {
+    return false
   }
 }
 
 function getGovAuthCrashKey(url: string) {
   try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
-    const pathname = parsed.pathname.toLowerCase();
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.toLowerCase()
+    const pathname = parsed.pathname.toLowerCase()
 
-    if (hostname === "sso.acesso.gov.br" || hostname === "acesso.gov.br") {
-      return `${hostname}${pathname}`;
+    if (hostname === 'sso.acesso.gov.br' || hostname === 'acesso.gov.br') {
+      return `${hostname}${pathname}`
     }
 
-    return url;
+    return url
   } catch {
-    return url;
+    return url
   }
 }
 
 function getDisplayBounds(referenceWindow: BrowserWindow) {
   if (referenceWindow.isDestroyed()) {
-    return screen.getPrimaryDisplay().bounds;
+    return screen.getPrimaryDisplay().bounds
   }
 
-  return screen.getDisplayMatching(referenceWindow.getBounds()).bounds;
+  return screen.getDisplayMatching(referenceWindow.getBounds()).bounds
 }
 
 function buildGovShellHtml() {
@@ -102,6 +132,10 @@ function buildGovShellHtml() {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+          http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
+        />
         <style>
           :root {
             color-scheme: light;
@@ -158,17 +192,13 @@ function buildGovShellHtml() {
 
             if (back) {
               back.addEventListener("click", () => {
-                if (window.electron && window.electron.ipcRenderer) {
-                  window.electron.ipcRenderer.send(${JSON.stringify(CONTROL_BACK_CHANNEL)});
-                }
+                window.totemGovControls?.back?.();
               });
             }
 
             if (exit) {
               exit.addEventListener("click", () => {
-                if (window.electron && window.electron.ipcRenderer) {
-                  window.electron.ipcRenderer.send(${JSON.stringify(CONTROL_CLOSE_CHANNEL)});
-                }
+                window.totemGovControls?.exit?.();
               });
             }
           };
@@ -177,7 +207,7 @@ function buildGovShellHtml() {
         </script>
       </body>
     </html>
-  `;
+  `
 }
 
 function buildGovLoadingHtml() {
@@ -187,6 +217,10 @@ function buildGovLoadingHtml() {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+          http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
+        />
         <style>
           html, body {
             margin: 0;
@@ -250,26 +284,26 @@ function buildGovLoadingHtml() {
         </div>
       </body>
     </html>
-  `;
+  `
 }
 
 function buildGovStatusHtml(message: string, detail: string, retryUrl?: string) {
   const escapeHtml = (value: string) =>
-    String(value || "").replace(/[&<>"']/g, (char) => {
+    String(value || '').replace(/[&<>"']/g, (char) => {
       const map: Record<string, string> = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      };
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }
 
-      return map[char] || char;
-    });
+      return map[char] || char
+    })
 
-  const safeMessage = escapeHtml(message);
-  const safeDetail = escapeHtml(detail);
-  const safeRetryUrl = retryUrl ? JSON.stringify(String(retryUrl)) : "";
+  const safeMessage = escapeHtml(message)
+  const safeDetail = escapeHtml(detail)
+  const safeRetryUrl = retryUrl ? JSON.stringify(String(retryUrl)) : ''
 
   return `
     <!doctype html>
@@ -277,6 +311,10 @@ function buildGovStatusHtml(message: string, detail: string, retryUrl?: string) 
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+          http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
+        />
         <style>
           html, body {
             margin: 0;
@@ -332,11 +370,7 @@ function buildGovStatusHtml(message: string, detail: string, retryUrl?: string) 
         <div class="wrap">
           <div class="title">${safeMessage}</div>
           <div class="detail">${safeDetail}</div>
-          ${
-            retryUrl
-              ? `<button class="retry" id="retry-gov">Tentar novamente</button>`
-              : ""
-          }
+          ${retryUrl ? `<button class="retry" id="retry-gov">Tentar novamente</button>` : ''}
         </div>
         ${
           retryUrl
@@ -345,23 +379,25 @@ function buildGovStatusHtml(message: string, detail: string, retryUrl?: string) 
                   window.location.replace(${safeRetryUrl});
                 });
               </script>`
-            : ""
+            : ''
         }
       </body>
     </html>
-  `;
+  `
 }
 
-function showGovStatus(message: string, detail = "Aguarde alguns instantes.") {
-  if (!govContentWindow || govContentWindow.isDestroyed()) return;
+function showGovStatus(message: string, detail = 'Aguarde alguns instantes.') {
+  if (!govContentWindow || govContentWindow.isDestroyed()) return
 
   void govContentWindow
-    .loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildGovStatusHtml(message, detail))}`)
-    .catch(() => {});
+    .loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(buildGovStatusHtml(message, detail))}`
+    )
+    .catch(() => {})
 }
 
 function showGovRetryStatus(message: string, detail: string, retryUrl: string) {
-  if (!govContentWindow || govContentWindow.isDestroyed()) return;
+  if (!govContentWindow || govContentWindow.isDestroyed()) return
 
   void govContentWindow
     .loadURL(
@@ -369,11 +405,11 @@ function showGovRetryStatus(message: string, detail: string, retryUrl: string) {
         buildGovStatusHtml(message, detail, retryUrl || GOV_LOGIN_URL)
       )}`
     )
-    .catch(() => {});
+    .catch(() => {})
 }
 
 function injectGovContentStyle(windowRef: BrowserWindow) {
-  if (windowRef.isDestroyed() || windowRef.webContents.isDestroyed()) return;
+  if (windowRef.isDestroyed() || windowRef.webContents.isDestroyed()) return
 
   void windowRef.webContents
     .executeJavaScript(
@@ -404,156 +440,165 @@ function injectGovContentStyle(windowRef: BrowserWindow) {
       `,
       true
     )
-    .catch(() => {});
+    .catch(() => {})
 }
 
 function destroyGovWindows() {
   if (govShellWindow && !govShellWindow.isDestroyed()) {
-    govShellWindow.destroy();
+    govShellWindow.destroy()
   }
 
   if (govContentWindow && !govContentWindow.isDestroyed()) {
-    govContentWindow.destroy();
+    govContentWindow.destroy()
   }
 
-  govShellWindow = null;
-  govContentWindow = null;
-  recovering = false;
-  govPartition = "";
-  govShellReady = false;
-  govContentReady = false;
-  lastGovOpenUrl = "";
-  lastGovOpenAt = 0;
-  lastGovAuthCrashKey = "";
-  lastGovAuthCrashAt = 0;
-  lastGovAuthCrashCount = 0;
+  govShellWindow = null
+  govContentWindow = null
+  recovering = false
+  govPartition = ''
+  govShellReady = false
+  govContentReady = false
+  lastGovOpenUrl = ''
+  lastGovOpenAt = 0
+  lastGovAuthCrashKey = ''
+  lastGovAuthCrashAt = 0
+  lastGovAuthCrashCount = 0
 }
 
 function showParentWithoutFlash() {
-  if (!parentWindowRef || parentWindowRef.isDestroyed()) return;
-  parentWindowRef.show();
-  parentWindowRef.focus();
+  if (!parentWindowRef || parentWindowRef.isDestroyed()) return
+  parentWindowRef.show()
+  parentWindowRef.focus()
 }
 
-export function closeGovWindow(reason: "exit" | "back" | "crash" = "exit") {
-  const parent = parentWindowRef;
+export function closeGovWindow(reason: 'exit' | 'back' | 'crash' = 'exit') {
+  const parent = parentWindowRef
+  logSecurityInfo('[gov-window] fechando fluxo GOV', { reason, lastGovUrl })
 
-  destroyGovWindows();
-  lastGovUrl = GOV_LOGIN_URL;
+  destroyGovWindows()
+  lastGovUrl = GOV_LOGIN_URL
 
-  if (!parent || parent.isDestroyed()) return;
+  if (!parent || parent.isDestroyed()) return
 
-  showParentWithoutFlash();
+  showParentWithoutFlash()
 
-  if (reason === "back") {
+  if (reason === 'back') {
     try {
       if (parent.webContents.canGoBack()) {
-        parent.webContents.goBack();
-        return;
+        parent.webContents.goBack()
+        return
       }
     } catch {
       // noop
     }
   }
 
-  if (reason === "exit" || reason === "crash") {
-    void parent.loadURL(START_URL).catch(() => {});
+  if (reason === 'exit' || reason === 'crash') {
+    void parent.loadURL(START_URL).catch(() => {})
   }
 }
 
-export function closeGovWindowAndReturnHome(reason: "exit" | "back" | "crash" = "exit") {
-  closeGovWindow(reason);
+export function closeGovWindowAndReturnHome(reason: 'exit' | 'back' | 'crash' = 'exit') {
+  closeGovWindow(reason)
 }
 
 export function isGovSensitiveUrl(url: string) {
   try {
-    const parsed = new URL(url);
-    return GOV_HOSTS.has(parsed.hostname.toLowerCase());
+    const parsed = new URL(url)
+    return GOV_HOSTS.has(parsed.hostname.toLowerCase())
   } catch {
-    return false;
+    return false
   }
 }
 
 function syncGovWindowBounds(parentWindow: BrowserWindow) {
-  if (!govShellWindow || !govContentWindow) return;
-  if (govShellWindow.isDestroyed() || govContentWindow.isDestroyed()) return;
+  if (!govShellWindow || !govContentWindow) return
+  if (govShellWindow.isDestroyed() || govContentWindow.isDestroyed()) return
 
-  const bounds = getDisplayBounds(parentWindow);
+  const bounds = getDisplayBounds(parentWindow)
   govShellWindow.setBounds({
     x: bounds.x,
     y: bounds.y,
     width: bounds.width,
-    height: TOP_BAR_HEIGHT,
-  });
+    height: TOP_BAR_HEIGHT
+  })
 
   govContentWindow.setBounds({
     x: bounds.x,
     y: bounds.y + TOP_BAR_HEIGHT,
     width: bounds.width,
-    height: Math.max(100, bounds.height - TOP_BAR_HEIGHT),
-  });
+    height: Math.max(100, bounds.height - TOP_BAR_HEIGHT)
+  })
 
-  enforceGovTopmost();
+  enforceGovTopmost()
 }
 
 function finalizeGovPresentation() {
-  if (!parentWindowRef || parentWindowRef.isDestroyed()) return;
-  if (!govShellWindow || !govContentWindow) return;
-  if (govShellWindow.isDestroyed() || govContentWindow.isDestroyed()) return;
-  if (!govShellReady || !govContentReady) return;
+  if (!parentWindowRef || parentWindowRef.isDestroyed()) return
+  if (!govShellWindow || !govContentWindow) return
+  if (govShellWindow.isDestroyed() || govContentWindow.isDestroyed()) return
+  if (!govShellReady || !govContentReady) return
 
-  govShellWindow.showInactive();
-  govContentWindow.show();
-  enforceGovTopmost();
-  parentWindowRef.hide();
-  govShellWindow.focus();
-  govContentWindow.focus();
+  govShellWindow.showInactive()
+  govContentWindow.show()
+  enforceGovTopmost()
+  parentWindowRef.hide()
+  govShellWindow.focus()
+  govContentWindow.focus()
 }
 
 function shouldIgnoreDuplicateGovOpen(url: string) {
-  const now = Date.now();
+  const now = Date.now()
   if (lastGovOpenUrl === url && now - lastGovOpenAt < 1500) {
-    return true;
+    return true
   }
 
-  lastGovOpenUrl = url;
-  lastGovOpenAt = now;
-  return false;
+  lastGovOpenUrl = url
+  lastGovOpenAt = now
+  return false
 }
 
 function registerGovAuthCrashAttempt(url: string) {
-  const key = getGovAuthCrashKey(url);
-  const now = Date.now();
-  if (lastGovAuthCrashKey === key && now - lastGovAuthCrashAt <= GOV_AUTH_SAME_URL_RETRY_WINDOW_MS) {
-    lastGovAuthCrashCount += 1;
+  const key = getGovAuthCrashKey(url)
+  const now = Date.now()
+  if (
+    lastGovAuthCrashKey === key &&
+    now - lastGovAuthCrashAt <= GOV_AUTH_SAME_URL_RETRY_WINDOW_MS
+  ) {
+    lastGovAuthCrashCount += 1
   } else {
-    lastGovAuthCrashKey = key;
-    lastGovAuthCrashAt = now;
-    lastGovAuthCrashCount = 1;
+    lastGovAuthCrashKey = key
+    lastGovAuthCrashAt = now
+    lastGovAuthCrashCount = 1
   }
 
-  return lastGovAuthCrashCount;
+  return lastGovAuthCrashCount
 }
 
 function loadGovUrl(url: string, attempt = 0) {
-  if (!govContentWindow || govContentWindow.isDestroyed()) return;
+  if (!govContentWindow || govContentWindow.isDestroyed()) return
+  if (!isAllowedGovContentUrl(url)) {
+    logSecurityWarn('[gov-window] bloqueado loadURL fora da allowlist', { url, attempt })
+    showGovStatus('Navegacao bloqueada', 'O destino solicitado nao faz parte do portal oficial.')
+    return
+  }
 
   void govContentWindow.loadURL(url).catch((error: { code?: string }) => {
-    console.error("[gov-window] falha ao abrir:", error);
+    logSecurityError('[gov-window] falha ao abrir URL', { url, attempt, error })
 
-    if (error?.code === "ERR_FAILED" && attempt < 1) {
+    if (error?.code === 'ERR_FAILED' && attempt < 1) {
       setTimeout(() => {
-        loadGovUrl(url, attempt + 1);
-      }, 300);
-      return;
+        loadGovUrl(url, attempt + 1)
+      }, 300)
+      return
     }
 
-    closeGovWindow("crash");
-  });
+    closeGovWindow('crash')
+  })
 }
 
 function ensureGovWindows(parentWindow: BrowserWindow) {
-  registerControlsIpc();
+  registerControlsIpc()
 
   if (
     govShellWindow &&
@@ -561,12 +606,12 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
     govContentWindow &&
     !govContentWindow.isDestroyed()
   ) {
-    syncGovWindowBounds(parentWindow);
-    return;
+    syncGovWindowBounds(parentWindow)
+    return
   }
 
-  const bounds = getDisplayBounds(parentWindow);
-  govPartition = `temp:gov-${Date.now()}`;
+  const bounds = getDisplayBounds(parentWindow)
+  govPartition = `temp:gov-${Date.now()}`
 
   govShellWindow = new BrowserWindow({
     x: bounds.x,
@@ -586,17 +631,17 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
     minimizable: false,
     maximizable: false,
     closable: false,
-    backgroundColor: "#ffffff",
+    backgroundColor: '#ffffff',
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
       partition: govPartition,
-      devTools: false,
-    },
-  });
+      devTools: false
+    }
+  })
 
   govContentWindow = new BrowserWindow({
     x: bounds.x,
@@ -615,164 +660,207 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
     movable: false,
     minimizable: false,
     maximizable: false,
-    backgroundColor: "#ffffff",
+    backgroundColor: '#ffffff',
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
       partition: govPartition,
-      devTools: false,
-    },
-  });
+      devTools: false
+    }
+  })
 
-  registerKeyboardAvoidance(govContentWindow);
+  registerKeyboardAvoidance(govContentWindow)
 
-  govShellWindow.once("ready-to-show", () => {
-    govShellReady = true;
-    finalizeGovPresentation();
-  });
+  govShellWindow.once('ready-to-show', () => {
+    govShellReady = true
+    finalizeGovPresentation()
+  })
 
-  govContentWindow.once("ready-to-show", () => {
-    govContentReady = true;
-    finalizeGovPresentation();
-  });
+  govContentWindow.once('ready-to-show', () => {
+    govContentReady = true
+    finalizeGovPresentation()
+  })
 
-  void govShellWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildGovShellHtml())}`);
-  void govContentWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildGovLoadingHtml())}`);
+  void govShellWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(buildGovShellHtml())}`
+  )
+  void govContentWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(buildGovLoadingHtml())}`
+  )
 
-  govShellWindow.on("closed", () => {
+  govShellWindow.on('closed', () => {
     if (govContentWindow && !govContentWindow.isDestroyed()) {
-      govContentWindow.destroy();
+      govContentWindow.destroy()
     }
-    govShellWindow = null;
-    govContentWindow = null;
-    recovering = false;
-    showParentWithoutFlash();
-  });
+    govShellWindow = null
+    govContentWindow = null
+    recovering = false
+    showParentWithoutFlash()
+  })
 
-  govShellWindow.on("show", enforceGovTopmost);
-  govShellWindow.on("focus", enforceGovTopmost);
-  govShellWindow.on("restore", enforceGovTopmost);
+  govShellWindow.on('show', enforceGovTopmost)
+  govShellWindow.on('focus', enforceGovTopmost)
+  govShellWindow.on('restore', enforceGovTopmost)
 
-  govContentWindow.on("closed", () => {
+  govContentWindow.on('closed', () => {
     if (govShellWindow && !govShellWindow.isDestroyed()) {
-      govShellWindow.destroy();
+      govShellWindow.destroy()
     }
-    govShellWindow = null;
-    govContentWindow = null;
-    recovering = false;
-    showParentWithoutFlash();
-  });
+    govShellWindow = null
+    govContentWindow = null
+    recovering = false
+    showParentWithoutFlash()
+  })
 
-  govContentWindow.on("show", enforceGovTopmost);
-  govContentWindow.on("focus", enforceGovTopmost);
-  govContentWindow.on("restore", enforceGovTopmost);
+  govContentWindow.on('show', enforceGovTopmost)
+  govContentWindow.on('focus', enforceGovTopmost)
+  govContentWindow.on('restore', enforceGovTopmost)
 
   govContentWindow.webContents.setWindowOpenHandler(({ url: nextUrl }) => {
     if (!govContentWindow || govContentWindow.isDestroyed()) {
-      return { action: "deny" };
+      return { action: 'deny' }
     }
 
-    if (/^https?:\/\//i.test(nextUrl)) {
-      lastGovUrl = nextUrl;
-      void govContentWindow.loadURL(nextUrl).catch(() => {});
+    if (isAllowedGovContentUrl(nextUrl)) {
+      lastGovUrl = nextUrl
+      void govContentWindow.loadURL(nextUrl).catch(() => {})
+      logSecurityInfo('[gov-window] popup interno permitido', { url: nextUrl })
+    } else {
+      logSecurityWarn('[gov-window] popup bloqueado fora da allowlist', { url: nextUrl })
     }
 
-    return { action: "deny" };
-  });
+    return { action: 'deny' }
+  })
 
-  govContentWindow.webContents.on("did-navigate", (_event, nextUrl) => {
+  govContentWindow.webContents.on('will-navigate', (event, nextUrl) => {
+    if (nextUrl.startsWith('data:text/html')) {
+      return
+    }
+
+    if (!isAllowedGovContentUrl(nextUrl)) {
+      event.preventDefault()
+      logSecurityWarn('[gov-window] navegacao bloqueada fora da allowlist', { url: nextUrl })
+      showGovStatus('Navegacao bloqueada', 'O destino solicitado nao faz parte do portal oficial.')
+    }
+  })
+
+  govContentWindow.webContents.on('will-redirect', (event, nextUrl) => {
+    if (!isAllowedGovContentUrl(nextUrl)) {
+      event.preventDefault()
+      logSecurityWarn('[gov-window] redirecionamento bloqueado fora da allowlist', { url: nextUrl })
+      showGovStatus(
+        'Redirecionamento bloqueado',
+        'O destino solicitado nao faz parte do portal oficial.'
+      )
+    }
+  })
+
+  govContentWindow.webContents.on('did-navigate', (_event, nextUrl) => {
     if (isGovSensitiveUrl(nextUrl)) {
-      lastGovUrl = nextUrl;
+      lastGovUrl = nextUrl
     }
-  });
+  })
 
-  govContentWindow.webContents.on("did-navigate-in-page", (_event, nextUrl) => {
+  govContentWindow.webContents.on('did-navigate-in-page', (_event, nextUrl) => {
     if (isGovSensitiveUrl(nextUrl)) {
-      lastGovUrl = nextUrl;
+      lastGovUrl = nextUrl
     }
-  });
+  })
 
-  govContentWindow.webContents.on("did-finish-load", () => {
-    injectGovContentStyle(govContentWindow as BrowserWindow);
-  });
+  govContentWindow.webContents.on('did-finish-load', () => {
+    injectGovContentStyle(govContentWindow as BrowserWindow)
+  })
 
-  govContentWindow.webContents.on("render-process-gone", (_event, details) => {
-    console.error("[gov-window] render-process-gone:", details.reason, lastGovUrl);
+  govContentWindow.webContents.on('render-process-gone', (_event, details) => {
+    logSecurityError('[gov-window] render-process-gone', {
+      reason: details.reason,
+      exitCode: details.exitCode,
+      lastGovUrl
+    })
 
-    if (!govContentWindow || govContentWindow.isDestroyed()) return;
+    if (!govContentWindow || govContentWindow.isDestroyed()) return
 
-    if (details.reason !== "crashed") {
-      closeGovWindow("crash");
-      return;
+    if (details.reason !== 'crashed') {
+      closeGovWindow('crash')
+      return
     }
 
-    const crashedUrl = lastGovUrl;
+    const crashedUrl = lastGovUrl
 
     if (recovering) {
       showGovStatus(
-        "Nao foi possivel abrir o login do Gov.br",
-        "A tela de autenticacao apresentou instabilidade. Toque em Voltar ou tente novamente em instantes."
-      );
-      loadGovUrl(GOV_LOGIN_URL);
-      recovering = false;
-      return;
+        'Nao foi possivel abrir o login do Gov.br',
+        'A tela de autenticacao apresentou instabilidade. Toque em Voltar ou tente novamente em instantes.'
+      )
+      loadGovUrl(GOV_LOGIN_URL)
+      recovering = false
+      return
     }
 
     if (!isGovAuthUrl(crashedUrl)) {
-      recovering = true;
-      showGovStatus("Recuperando acesso", "Aguarde alguns instantes.");
-      loadGovUrl(GOV_LOGIN_URL);
-      recovering = false;
-      return;
+      recovering = true
+      showGovStatus('Recuperando acesso', 'Aguarde alguns instantes.')
+      loadGovUrl(GOV_LOGIN_URL)
+      recovering = false
+      return
     }
 
-    const crashAttempt = registerGovAuthCrashAttempt(crashedUrl);
+    const crashAttempt = registerGovAuthCrashAttempt(crashedUrl)
 
     if (crashAttempt <= GOV_AUTH_SAME_URL_RETRY_LIMIT) {
-      recovering = true;
-      showGovStatus("Recuperando acesso", "O portal do Gov.br apresentou uma instabilidade. Tentando novamente.");
+      recovering = true
+      showGovStatus(
+        'Recuperando acesso',
+        'O portal do Gov.br apresentou uma instabilidade. Tentando novamente.'
+      )
       setTimeout(() => {
-        recovering = false;
-        loadGovUrl(crashedUrl, 0);
-      }, 350);
-      return;
+        recovering = false
+        loadGovUrl(crashedUrl, 0)
+      }, 350)
+      return
     }
 
-    recovering = false;
+    recovering = false
     showGovRetryStatus(
-      "Nao foi possivel abrir o login do Gov.br",
-      "A tela de autenticacao apresentou instabilidade repetida. Toque em tentar novamente ou use Voltar para retornar ao sistema.",
+      'Nao foi possivel abrir o login do Gov.br',
+      'A tela de autenticacao apresentou instabilidade repetida. Toque em tentar novamente ou use Voltar para retornar ao sistema.',
       GOV_LOGIN_URL
-    );
-  });
+    )
+  })
 }
 
 export function openGovWindow(parentWindow: BrowserWindow, url: string) {
-  parentWindowRef = parentWindow;
-  lastGovUrl = url;
-
-  if (shouldIgnoreDuplicateGovOpen(url)) {
-    return govContentWindow;
+  if (!isAllowedGovContentUrl(url)) {
+    logSecurityWarn('[gov-window] tentativa de abrir GOV com URL nao permitida', { url })
+    return null
   }
 
-  ensureGovWindows(parentWindow);
-  syncGovWindowBounds(parentWindow);
+  parentWindowRef = parentWindow
+  lastGovUrl = url
+
+  if (shouldIgnoreDuplicateGovOpen(url)) {
+    logSecurityInfo('[gov-window] ignorando abertura duplicada', { url })
+    return govContentWindow
+  }
+
+  ensureGovWindows(parentWindow)
+  syncGovWindowBounds(parentWindow)
 
   if (!govShellWindow || !govContentWindow) {
-    return null;
+    return null
   }
 
   if (govShellReady && govContentReady) {
-    finalizeGovPresentation();
+    finalizeGovPresentation()
   }
 
-  const currentUrl = govContentWindow.webContents.getURL();
+  const currentUrl = govContentWindow.webContents.getURL()
   if (currentUrl !== url) {
-    loadGovUrl(url);
+    loadGovUrl(url)
   }
 
-  return govContentWindow;
+  return govContentWindow
 }

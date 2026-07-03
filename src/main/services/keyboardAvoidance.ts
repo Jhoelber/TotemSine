@@ -1,140 +1,144 @@
-import { app, BrowserWindow, WebContents, ipcMain, screen, webContents } from "electron";
-import { join } from "path";
-import { assertTrustedRendererUrl, isTrustedRendererUrl } from "../security/trustedOrigins";
+import { app, BrowserWindow, WebContents, ipcMain, screen, webContents } from 'electron'
+import { join } from 'path'
+import { assertTrustedRendererUrl, isTrustedRendererUrl } from '../security/trustedOrigins'
+import { logSecurityWarn } from './securityLog'
 
-const DETECTOR_FLAG = "__LPX_ELECTRON_KEYBOARD_DETECTOR_REGISTERED__" as const;
-const LAST_INJECTED_URL_FLAG = "__LPX_LAST_KEYBOARD_DETECTOR_URL__" as const;
+const DETECTOR_FLAG = '__LPX_ELECTRON_KEYBOARD_DETECTOR_REGISTERED__' as const
+const LAST_INJECTED_URL_FLAG = '__LPX_LAST_KEYBOARD_DETECTOR_URL__' as const
 
-const SHOW_CHANNEL = "totem-keyboard-show";
-const HIDE_CHANNEL = "totem-keyboard-hide";
-const ACTION_CHANNEL = "totem-keyboard-action";
-const RESET_CHANNEL = "totem-keyboard-reset";
+const SHOW_CHANNEL = 'totem-keyboard-show'
+const HIDE_CHANNEL = 'totem-keyboard-hide'
+const ACTION_CHANNEL = 'totem-keyboard-action'
+const RESET_CHANNEL = 'totem-keyboard-reset'
 
-const KEYBOARD_HEIGHT = 392;
+const KEYBOARD_HEIGHT = 392
 const TRUSTED_KEYBOARD_CLIENT_HOSTS = new Set([
-  "servicos.mte.gov.br",
-  "sso.acesso.gov.br",
-  "acesso.gov.br",
-]);
+  'servicos.mte.gov.br',
+  'sso.acesso.gov.br',
+  'acesso.gov.br'
+])
 
-let keyboardWindow: BrowserWindow | null = null;
-let keyboardIpcRegistered = false;
-let currentTargetId = 0;
-let currentOwnerWindow: BrowserWindow | null = null;
-let currentOwnerSync: (() => void) | null = null;
-let keyboardVisible = false;
+let keyboardWindow: BrowserWindow | null = null
+let keyboardIpcRegistered = false
+let currentTargetId = 0
+let currentOwnerWindow: BrowserWindow | null = null
+let currentOwnerSync: (() => void) | null = null
+let keyboardVisible = false
 
 function logKeyboard(message: string, payload?: unknown) {
-  if (app.isPackaged) return;
+  if (app.isPackaged) return
   if (payload === undefined) {
-    console.log(message);
-    return;
+    console.log(message)
+    return
   }
-  console.log(message, payload);
+  console.log(message, payload)
 }
 
 function isTrustedKeyboardClientUrl(url: string) {
-  if (isTrustedRendererUrl(url)) return true;
+  if (isTrustedRendererUrl(url)) return true
 
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(url)
     return (
-      ["https:", "http:"].includes(parsed.protocol) &&
+      ['https:', 'http:'].includes(parsed.protocol) &&
       TRUSTED_KEYBOARD_CLIENT_HOSTS.has(parsed.hostname.toLowerCase())
-    );
+    )
   } catch {
-    return false;
+    return false
   }
 }
 
 function assertTrustedKeyboardClientUrl(url: string, context: string) {
-  if (isTrustedKeyboardClientUrl(url)) return;
-  throw new Error(`Origem nao autorizada para ${context}.`);
+  if (isTrustedKeyboardClientUrl(url)) return
+  logSecurityWarn('[keyboard] origem nao autorizada', { context, url })
+  throw new Error(`Origem nao autorizada para ${context}.`)
 }
 
 function getEventUrl(event: Electron.IpcMainInvokeEvent) {
-  return event.senderFrame?.url || event.sender.getURL() || "about:blank";
+  return event.senderFrame?.url || event.sender.getURL() || 'about:blank'
 }
 
 function isGovUnstableUrl(url: string) {
   try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
-    const pathname = parsed.pathname.toLowerCase();
-    if (hostname !== "sso.acesso.gov.br" && hostname !== "acesso.gov.br") return false;
-    return pathname.includes("/login") || pathname.includes("/authorize") || pathname.includes("/logout");
+    const parsed = new URL(url)
+    const hostname = parsed.hostname.toLowerCase()
+    const pathname = parsed.pathname.toLowerCase()
+    if (hostname !== 'sso.acesso.gov.br' && hostname !== 'acesso.gov.br') return false
+    return (
+      pathname.includes('/login') || pathname.includes('/authorize') || pathname.includes('/logout')
+    )
   } catch {
-    return false;
+    return false
   }
 }
 
 function getOwnerWindow(contents: WebContents) {
-  return BrowserWindow.fromWebContents(contents) ?? null;
+  return BrowserWindow.fromWebContents(contents) ?? null
 }
 
 function isGovUrl(url: string) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    return hostname === "sso.acesso.gov.br" || hostname === "acesso.gov.br";
+    const hostname = new URL(url).hostname.toLowerCase()
+    return hostname === 'sso.acesso.gov.br' || hostname === 'acesso.gov.br'
   } catch {
-    return false;
+    return false
   }
 }
 
 function positionKeyboardWindow(owner: BrowserWindow) {
-  if (!keyboardWindow || keyboardWindow.isDestroyed() || owner.isDestroyed()) return;
-  const bounds = screen.getDisplayMatching(owner.getBounds()).bounds;
+  if (!keyboardWindow || keyboardWindow.isDestroyed() || owner.isDestroyed()) return
+  const bounds = screen.getDisplayMatching(owner.getBounds()).bounds
   keyboardWindow.setBounds({
     x: bounds.x,
     y: bounds.y + bounds.height - KEYBOARD_HEIGHT,
     width: bounds.width,
-    height: KEYBOARD_HEIGHT,
-  });
-  keyboardWindow.setAlwaysOnTop(true, "screen-saver");
+    height: KEYBOARD_HEIGHT
+  })
+  keyboardWindow.setAlwaysOnTop(true, 'screen-saver')
 }
 
 function unbindOwnerWindow() {
-  if (!currentOwnerWindow || !currentOwnerSync) return;
-  currentOwnerWindow.off("move", currentOwnerSync);
-  currentOwnerWindow.off("resize", currentOwnerSync);
-  currentOwnerWindow.off("show", currentOwnerSync);
-  currentOwnerWindow.off("restore", currentOwnerSync);
-  currentOwnerWindow.off("closed", currentOwnerSync);
-  currentOwnerWindow = null;
-  currentOwnerSync = null;
+  if (!currentOwnerWindow || !currentOwnerSync) return
+  currentOwnerWindow.off('move', currentOwnerSync)
+  currentOwnerWindow.off('resize', currentOwnerSync)
+  currentOwnerWindow.off('show', currentOwnerSync)
+  currentOwnerWindow.off('restore', currentOwnerSync)
+  currentOwnerWindow.off('closed', currentOwnerSync)
+  currentOwnerWindow = null
+  currentOwnerSync = null
 }
 
 function bindOwnerWindow(owner: BrowserWindow) {
-  if (currentOwnerWindow === owner) return;
-  unbindOwnerWindow();
-  currentOwnerWindow = owner;
+  if (currentOwnerWindow === owner) return
+  unbindOwnerWindow()
+  currentOwnerWindow = owner
   currentOwnerSync = () => {
     if (!owner.isDestroyed()) {
-      positionKeyboardWindow(owner);
+      positionKeyboardWindow(owner)
     }
-  };
-  owner.on("move", currentOwnerSync);
-  owner.on("resize", currentOwnerSync);
-  owner.on("show", currentOwnerSync);
-  owner.on("restore", currentOwnerSync);
-  owner.on("closed", currentOwnerSync);
+  }
+  owner.on('move', currentOwnerSync)
+  owner.on('resize', currentOwnerSync)
+  owner.on('show', currentOwnerSync)
+  owner.on('restore', currentOwnerSync)
+  owner.on('closed', currentOwnerSync)
 }
 
 function getKeyboardRouteUrl() {
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL
   if (devServerUrl) {
-    return `${devServerUrl.replace(/\/$/, "")}/#/keyboard`;
+    return `${devServerUrl.replace(/\/$/, '')}/#/keyboard`
   }
 
-  return null;
+  return null
 }
 
 function getKeyboardRouteFile() {
-  return join(__dirname, "../renderer/index.html");
+  return join(__dirname, '../renderer/index.html')
 }
 
 function createKeyboardWindow() {
-  if (keyboardWindow && !keyboardWindow.isDestroyed()) return keyboardWindow;
+  if (keyboardWindow && !keyboardWindow.isDestroyed()) return keyboardWindow
 
   keyboardWindow = new BrowserWindow({
     show: false,
@@ -152,52 +156,55 @@ function createKeyboardWindow() {
     autoHideMenuBar: true,
     hasShadow: false,
     roundedCorners: false,
-    backgroundColor: "#123d63",
+    backgroundColor: '#123d63',
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
       nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
+      contextIsolation: true
+    }
+  })
 
-  keyboardWindow.on("closed", () => {
-    keyboardWindow = null;
-    currentTargetId = 0;
-    keyboardVisible = false;
-    unbindOwnerWindow();
-  });
+  keyboardWindow.on('closed', () => {
+    keyboardWindow = null
+    currentTargetId = 0
+    keyboardVisible = false
+    unbindOwnerWindow()
+  })
 
-  keyboardWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    logKeyboard("[keyboard-window] console", { level, message, line, sourceId });
-  });
+  keyboardWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    logKeyboard('[keyboard-window] console', { level, message, line, sourceId })
+  })
 
-  keyboardWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-    console.error("[keyboard-window] did-fail-load", {
-      errorCode,
-      errorDescription,
-      validatedURL,
-      isMainFrame,
-    });
-  });
+  keyboardWindow.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      console.error('[keyboard-window] did-fail-load', {
+        errorCode,
+        errorDescription,
+        validatedURL,
+        isMainFrame
+      })
+    }
+  )
 
-  keyboardWindow.webContents.on("render-process-gone", (_event, details) => {
-    console.error("[keyboard-window] render-process-gone", details);
-  });
+  keyboardWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[keyboard-window] render-process-gone', details)
+  })
 
-  const keyboardRouteUrl = getKeyboardRouteUrl();
+  const keyboardRouteUrl = getKeyboardRouteUrl()
   if (keyboardRouteUrl) {
-    void keyboardWindow.loadURL(keyboardRouteUrl);
+    void keyboardWindow.loadURL(keyboardRouteUrl)
   } else {
-    void keyboardWindow.loadFile(getKeyboardRouteFile(), { hash: "/keyboard" });
+    void keyboardWindow.loadFile(getKeyboardRouteFile(), { hash: '/keyboard' })
   }
 
-  return keyboardWindow;
+  return keyboardWindow
 }
 
 function showKeyboardForContents(contents: WebContents) {
-  const owner = getOwnerWindow(contents);
-  if (!owner || owner.isDestroyed()) return;
+  const owner = getOwnerWindow(contents)
+  if (!owner || owner.isDestroyed()) return
 
   if (
     currentTargetId === contents.id &&
@@ -206,45 +213,45 @@ function showKeyboardForContents(contents: WebContents) {
     !keyboardWindow.isDestroyed() &&
     keyboardWindow.isVisible()
   ) {
-    positionKeyboardWindow(owner);
-    return;
+    positionKeyboardWindow(owner)
+    return
   }
 
-  currentTargetId = contents.id;
-  bindOwnerWindow(owner);
+  currentTargetId = contents.id
+  bindOwnerWindow(owner)
 
-  const win = createKeyboardWindow();
-  positionKeyboardWindow(owner);
-  logKeyboard("[keyboard-main] teclado solicitado", {
+  const win = createKeyboardWindow()
+  positionKeyboardWindow(owner)
+  logKeyboard('[keyboard-main] teclado solicitado', {
     ownerWindowId: owner.id,
-    targetWebContentsId: contents.id,
-  });
-  owner.focus();
-  win.showInactive();
-  keyboardVisible = true;
-  win.setAlwaysOnTop(true, "screen-saver");
-  win.moveTop();
-  win.webContents.send(RESET_CHANNEL);
+    targetWebContentsId: contents.id
+  })
+  owner.focus()
+  win.showInactive()
+  keyboardVisible = true
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.moveTop()
+  win.webContents.send(RESET_CHANNEL)
 }
 
 function hideKeyboard() {
   if (currentTargetId) {
-    logKeyboard("[keyboard-main] teclado escondido", { targetWebContentsId: currentTargetId });
+    logKeyboard('[keyboard-main] teclado escondido', { targetWebContentsId: currentTargetId })
   }
-  currentTargetId = 0;
-  keyboardVisible = false;
+  currentTargetId = 0
+  keyboardVisible = false
   if (keyboardWindow && !keyboardWindow.isDestroyed()) {
-    keyboardWindow.hide();
+    keyboardWindow.hide()
   }
 }
 
 function getTargetContents() {
-  if (!currentTargetId) return null;
-  return webContents.fromId(currentTargetId) ?? null;
+  if (!currentTargetId) return null
+  return webContents.fromId(currentTargetId) ?? null
 }
 
 async function runTargetAction(target: WebContents, action: { kind: string; text?: string }) {
-  const payload = JSON.stringify(action);
+  const payload = JSON.stringify(action)
   const result = await target.executeJavaScript(
     `
       (async () => {
@@ -256,95 +263,95 @@ async function runTargetAction(target: WebContents, action: { kind: string; text
       })();
     `,
     true
-  );
+  )
 
-  return result as { ok?: boolean };
+  return result as { ok?: boolean }
 }
 
 async function fallbackTargetAction(target: WebContents, action: { kind: string; text?: string }) {
   try {
-    target.focus();
-    if (action.kind === "text" && action.text) {
-      await target.insertText(action.text);
-      return { ok: true };
+    target.focus()
+    if (action.kind === 'text' && action.text) {
+      await target.insertText(action.text)
+      return { ok: true }
     }
-    if (action.kind === "backspace") {
-      target.sendInputEvent({ type: "keyDown", keyCode: "Backspace" });
-      target.sendInputEvent({ type: "keyUp", keyCode: "Backspace" });
-      return { ok: true };
+    if (action.kind === 'backspace') {
+      target.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' })
+      target.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' })
+      return { ok: true }
     }
-    if (action.kind === "enter") {
-      target.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
-      target.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
-      return { ok: true };
+    if (action.kind === 'enter') {
+      target.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' })
+      target.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' })
+      return { ok: true }
     }
   } catch {
-    return { ok: false };
+    return { ok: false }
   }
-  return { ok: false };
+  return { ok: false }
 }
 
 async function applyKeyboardAction(action: { kind: string; text?: string }) {
-  if (action.kind === "hide") {
-    const target = getTargetContents();
+  if (action.kind === 'hide') {
+    const target = getTargetContents()
     if (target && !target.isDestroyed()) {
       try {
         await target.executeJavaScript(
           `window.__LPX_ELECTRON_KEYBOARD_HELPER__ && window.__LPX_ELECTRON_KEYBOARD_HELPER__.dismiss && window.__LPX_ELECTRON_KEYBOARD_HELPER__.dismiss();`,
           true
-        );
+        )
       } catch {
         // noop
       }
     }
-    hideKeyboard();
-    return { success: true };
+    hideKeyboard()
+    return { success: true }
   }
 
-  const target = getTargetContents();
-  if (!target || target.isDestroyed()) return { success: false };
+  const target = getTargetContents()
+  if (!target || target.isDestroyed()) return { success: false }
 
   if (isGovUrl(target.getURL())) {
-    if (action.kind === "enter") {
-      return { success: true };
+    if (action.kind === 'enter') {
+      return { success: true }
     }
-    const fallback = await fallbackTargetAction(target, action);
-    return { success: !!fallback.ok };
+    const fallback = await fallbackTargetAction(target, action)
+    return { success: !!fallback.ok }
   }
 
   try {
-    const result = await runTargetAction(target, action);
-    if (result?.ok) return { success: true };
+    const result = await runTargetAction(target, action)
+    if (result?.ok) return { success: true }
   } catch {
     // fallback below
   }
 
-  const fallback = await fallbackTargetAction(target, action);
-  return { success: !!fallback.ok };
+  const fallback = await fallbackTargetAction(target, action)
+  return { success: !!fallback.ok }
 }
 
 function registerKeyboardIpc() {
-  if (keyboardIpcRegistered) return;
-  keyboardIpcRegistered = true;
+  if (keyboardIpcRegistered) return
+  keyboardIpcRegistered = true
 
   ipcMain.handle(SHOW_CHANNEL, async (event) => {
-    assertTrustedKeyboardClientUrl(getEventUrl(event), SHOW_CHANNEL);
-    showKeyboardForContents(event.sender);
-    return { success: true };
-  });
+    assertTrustedKeyboardClientUrl(getEventUrl(event), SHOW_CHANNEL)
+    showKeyboardForContents(event.sender)
+    return { success: true }
+  })
 
   ipcMain.handle(HIDE_CHANNEL, async (event) => {
-    assertTrustedKeyboardClientUrl(getEventUrl(event), HIDE_CHANNEL);
+    assertTrustedKeyboardClientUrl(getEventUrl(event), HIDE_CHANNEL)
     if (event.sender.id === currentTargetId) {
-      hideKeyboard();
+      hideKeyboard()
     }
-    return { success: true };
-  });
+    return { success: true }
+  })
 
   ipcMain.handle(ACTION_CHANNEL, async (event, action: { kind: string; text?: string }) => {
-    assertTrustedRendererUrl(getEventUrl(event), ACTION_CHANNEL);
-    return applyKeyboardAction(action);
-  });
+    assertTrustedRendererUrl(getEventUrl(event), ACTION_CHANNEL)
+    return applyKeyboardAction(action)
+  })
 }
 
 const DETECTOR_SCRIPT = `
@@ -716,65 +723,67 @@ const DETECTOR_SCRIPT = `
       lastEditableField = initialActive;
     }
   })();
-`;
+`
 
 async function injectDetector(mainWindow: BrowserWindow) {
   try {
-    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return
 
-    const currentUrl = mainWindow.webContents.getURL();
-    if (!currentUrl || currentUrl === "about:blank") return;
-    if (isGovUnstableUrl(currentUrl)) return;
-    if (!isTrustedKeyboardClientUrl(currentUrl)) return;
+    const currentUrl = mainWindow.webContents.getURL()
+    if (!currentUrl || currentUrl === 'about:blank') return
+    if (isGovUnstableUrl(currentUrl)) return
+    if (!isTrustedKeyboardClientUrl(currentUrl)) return
 
-    const wc = mainWindow.webContents as unknown as Record<string, string>;
-    if (wc[LAST_INJECTED_URL_FLAG] === currentUrl) return;
-    wc[LAST_INJECTED_URL_FLAG] = currentUrl;
+    const wc = mainWindow.webContents as unknown as Record<string, string>
+    if (wc[LAST_INJECTED_URL_FLAG] === currentUrl) return
+    wc[LAST_INJECTED_URL_FLAG] = currentUrl
 
-    const frames = mainWindow.webContents.mainFrame.framesInSubtree;
-    const results = await Promise.allSettled(frames.map((frame) => frame.executeJavaScript(DETECTOR_SCRIPT, true)));
+    const frames = mainWindow.webContents.mainFrame.framesInSubtree
+    const results = await Promise.allSettled(
+      frames.map((frame) => frame.executeJavaScript(DETECTOR_SCRIPT, true))
+    )
 
     results.forEach((result, index) => {
-      if (result.status === "fulfilled") {
-        logKeyboard("[keyboard-inject] frame ok", index);
+      if (result.status === 'fulfilled') {
+        logKeyboard('[keyboard-inject] frame ok', index)
       } else {
-        console.error("[keyboard-inject] frame fail", index, result.reason);
+        console.error('[keyboard-inject] frame fail', index, result.reason)
       }
-    });
+    })
   } catch {
     // nunca fatal
   }
 }
 
 export function registerKeyboardAvoidance(mainWindow: BrowserWindow) {
-  registerKeyboardIpc();
+  registerKeyboardIpc()
 
-  const wc = mainWindow.webContents as unknown as Record<string, unknown>;
-  if (wc[DETECTOR_FLAG]) return;
-  wc[DETECTOR_FLAG] = true;
-  wc[LAST_INJECTED_URL_FLAG] = "";
+  const wc = mainWindow.webContents as unknown as Record<string, unknown>
+  if (wc[DETECTOR_FLAG]) return
+  wc[DETECTOR_FLAG] = true
+  wc[LAST_INJECTED_URL_FLAG] = ''
 
   const resetInjectionState = () => {
-    wc[LAST_INJECTED_URL_FLAG] = "";
-  };
+    wc[LAST_INJECTED_URL_FLAG] = ''
+  }
 
   const patch = () => {
-    void injectDetector(mainWindow);
-  };
+    void injectDetector(mainWindow)
+  }
 
-  mainWindow.on("closed", () => {
+  mainWindow.on('closed', () => {
     if (currentOwnerWindow === mainWindow) {
-      hideKeyboard();
-      unbindOwnerWindow();
+      hideKeyboard()
+      unbindOwnerWindow()
     }
-  });
+  })
 
-  mainWindow.webContents.on("did-start-loading", resetInjectionState);
-  mainWindow.webContents.on("dom-ready", patch);
-  mainWindow.webContents.on("did-finish-load", patch);
-  mainWindow.webContents.on("did-navigate", patch);
-  mainWindow.webContents.on("did-navigate-in-page", patch);
+  mainWindow.webContents.on('did-start-loading', resetInjectionState)
+  mainWindow.webContents.on('dom-ready', patch)
+  mainWindow.webContents.on('did-finish-load', patch)
+  mainWindow.webContents.on('did-navigate', patch)
+  mainWindow.webContents.on('did-navigate-in-page', patch)
 
-  patch();
-  createKeyboardWindow();
+  patch()
+  createKeyboardWindow()
 }

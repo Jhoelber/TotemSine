@@ -25,7 +25,10 @@ export function registerInputIpc() {
 
   ipcMain.handle(
     'totem-type-key',
-    async (event, payload: { keyCode?: string; text?: string; isBackspace?: boolean; isEnter?: boolean }) => {
+    async (
+      event,
+      payload: { keyCode?: string; text?: string; isBackspace?: boolean; isEnter?: boolean }
+    ) => {
       assertTrustedRendererUrl(event.senderFrame?.url || '', 'digitar tecla')
       const keyCode = String(payload?.keyCode ?? '')
       const text = String(payload?.text ?? '')

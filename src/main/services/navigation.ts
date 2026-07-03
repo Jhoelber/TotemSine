@@ -1,5 +1,5 @@
-import type { BrowserWindow, WebFrameMain } from "electron";
-import { START_URL } from "../config/constants";
+import type { BrowserWindow, WebFrameMain } from 'electron'
+import { START_URL } from '../config/constants'
 
 const NAVIGATION_SCRIPT = `
   (() => {
@@ -935,7 +935,7 @@ const NAVIGATION_SCRIPT = `
       navigationContainer.style.zIndex = '9999';
     }
   })();
-`;
+`
 
 const START_PAGE_SCRIPT = `
   (() => {
@@ -985,42 +985,42 @@ const START_PAGE_SCRIPT = `
         adminWarning.style.display = 'block';
       });
   })();
-`;
+`
 
 async function injectScriptIntoFrames(mainWindow: BrowserWindow, script: string) {
-  await mainWindow.webContents.executeJavaScript(script, true).catch(() => {});
+  await mainWindow.webContents.executeJavaScript(script, true).catch(() => {})
 
-  const frames = mainWindow.webContents.mainFrame.framesInSubtree;
+  const frames = mainWindow.webContents.mainFrame.framesInSubtree
 
   await Promise.allSettled(
     frames.map((frame: WebFrameMain) => frame.executeJavaScript(script, true))
-  );
+  )
 }
 
 function normalizePathname(pathname: string) {
-  if (!pathname) return "/";
+  if (!pathname) return '/'
 
-  const trimmed = pathname.endsWith("/") && pathname !== "/" ? pathname.slice(0, -1) : pathname;
-  return trimmed || "/";
+  const trimmed = pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname
+  return trimmed || '/'
 }
 
 function normalizeHash(hash: string) {
-  if (!hash || hash === "#" || hash === "#/") return "";
-  return hash;
+  if (!hash || hash === '#' || hash === '#/') return ''
+  return hash
 }
 
 function isStartPageUrl(url: string) {
   try {
-    const current = new URL(url);
-    const start = new URL(START_URL);
+    const current = new URL(url)
+    const start = new URL(START_URL)
 
     return (
       current.origin === start.origin &&
       normalizePathname(current.pathname) === normalizePathname(start.pathname) &&
       normalizeHash(current.hash) === normalizeHash(start.hash)
-    );
+    )
   } catch {
-    return url === START_URL;
+    return url === START_URL
   }
 }
 
@@ -1029,9 +1029,9 @@ export function registerNavigation(
   idle: { iniciarTempoInativo: () => void }
 ) {
   async function addNavigationButtons() {
-    const url = mainWindow.webContents.getURL();
-    const isCustomPdfViewer = url.includes("#lpx-pdf-viewer");
-    const isStartPage = isStartPageUrl(url);
+    const url = mainWindow.webContents.getURL()
+    const isCustomPdfViewer = url.includes('#lpx-pdf-viewer')
+    const isStartPage = isStartPageUrl(url)
 
     if (isStartPage || isCustomPdfViewer) {
       await mainWindow.webContents.insertCSS(`
@@ -1040,15 +1040,15 @@ export function registerNavigation(
         .lpx-admin-warning { display: none !important; }
         body::-webkit-scrollbar { display: none; }
         body::before { content: none !important; display: none !important; height: 0 !important; }
-      `);
+      `)
 
-      await injectScriptIntoFrames(mainWindow, NAVIGATION_SCRIPT);
+      await injectScriptIntoFrames(mainWindow, NAVIGATION_SCRIPT)
 
       if (isStartPage) {
-        await mainWindow.webContents.executeJavaScript(START_PAGE_SCRIPT).catch(() => {});
+        await mainWindow.webContents.executeJavaScript(START_PAGE_SCRIPT).catch(() => {})
       }
 
-      return;
+      return
     }
 
     await mainWindow.webContents.insertCSS(`
@@ -1110,21 +1110,21 @@ export function registerNavigation(
       .lpx-admin-warning {
         display: none !important;
       }
-    `);
+    `)
 
-    await injectScriptIntoFrames(mainWindow, NAVIGATION_SCRIPT);
-    idle.iniciarTempoInativo();
+    await injectScriptIntoFrames(mainWindow, NAVIGATION_SCRIPT)
+    idle.iniciarTempoInativo()
   }
 
-  mainWindow.webContents.on("did-finish-load", () => {
-    void addNavigationButtons();
-  });
-  mainWindow.webContents.on("did-navigate", () => {
-    void addNavigationButtons();
-  });
-  mainWindow.webContents.on("did-navigate-in-page", () => {
-    void addNavigationButtons();
-  });
+  mainWindow.webContents.on('did-finish-load', () => {
+    void addNavigationButtons()
+  })
+  mainWindow.webContents.on('did-navigate', () => {
+    void addNavigationButtons()
+  })
+  mainWindow.webContents.on('did-navigate-in-page', () => {
+    void addNavigationButtons()
+  })
 
-  void addNavigationButtons();
+  void addNavigationButtons()
 }

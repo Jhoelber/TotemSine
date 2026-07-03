@@ -25,10 +25,7 @@ interface Window {
     }) => Promise<{ success: boolean }>
     keyboardShow?: () => Promise<{ success: boolean }>
     keyboardHide?: () => Promise<{ success: boolean }>
-    keyboardAction?: (payload: {
-      kind: string
-      text?: string
-    }) => Promise<{ success: boolean }>
+    keyboardAction?: (payload: { kind: string; text?: string }) => Promise<{ success: boolean }>
     onKeyboardReset?: (callback: () => void) => () => void
     resetToHome?: () => Promise<{ success: boolean; failureReason?: string }>
   }
