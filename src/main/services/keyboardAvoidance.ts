@@ -1,5 +1,6 @@
-import { BrowserWindow, WebContents, ipcMain, screen, webContents } from "electron";
+import { app, BrowserWindow, WebContents, ipcMain, screen, webContents } from "electron";
 import { join } from "path";
+import { assertTrustedRendererUrl, isTrustedRendererUrl } from "../security/trustedOrigins";
 
 const DETECTOR_FLAG = "__LPX_ELECTRON_KEYBOARD_DETECTOR_REGISTERED__" as const;
 const LAST_INJECTED_URL_FLAG = "__LPX_LAST_KEYBOARD_DETECTOR_URL__" as const;
@@ -10,6 +11,11 @@ const ACTION_CHANNEL = "totem-keyboard-action";
 const RESET_CHANNEL = "totem-keyboard-reset";
 
 const KEYBOARD_HEIGHT = 392;
+const TRUSTED_KEYBOARD_CLIENT_HOSTS = new Set([
+  "servicos.mte.gov.br",
+  "sso.acesso.gov.br",
+  "acesso.gov.br",
+]);
 
 let keyboardWindow: BrowserWindow | null = null;
 let keyboardIpcRegistered = false;
@@ -17,6 +23,38 @@ let currentTargetId = 0;
 let currentOwnerWindow: BrowserWindow | null = null;
 let currentOwnerSync: (() => void) | null = null;
 let keyboardVisible = false;
+
+function logKeyboard(message: string, payload?: unknown) {
+  if (app.isPackaged) return;
+  if (payload === undefined) {
+    console.log(message);
+    return;
+  }
+  console.log(message, payload);
+}
+
+function isTrustedKeyboardClientUrl(url: string) {
+  if (isTrustedRendererUrl(url)) return true;
+
+  try {
+    const parsed = new URL(url);
+    return (
+      ["https:", "http:"].includes(parsed.protocol) &&
+      TRUSTED_KEYBOARD_CLIENT_HOSTS.has(parsed.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertTrustedKeyboardClientUrl(url: string, context: string) {
+  if (isTrustedKeyboardClientUrl(url)) return;
+  throw new Error(`Origem nao autorizada para ${context}.`);
+}
+
+function getEventUrl(event: Electron.IpcMainInvokeEvent) {
+  return event.senderFrame?.url || event.sender.getURL() || "about:blank";
+}
 
 function isGovUnstableUrl(url: string) {
   try {
@@ -131,7 +169,7 @@ function createKeyboardWindow() {
   });
 
   keyboardWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    console.log("[keyboard-window] console", { level, message, line, sourceId });
+    logKeyboard("[keyboard-window] console", { level, message, line, sourceId });
   });
 
   keyboardWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -177,10 +215,9 @@ function showKeyboardForContents(contents: WebContents) {
 
   const win = createKeyboardWindow();
   positionKeyboardWindow(owner);
-  console.log("[keyboard-main] teclado solicitado", {
+  logKeyboard("[keyboard-main] teclado solicitado", {
     ownerWindowId: owner.id,
     targetWebContentsId: contents.id,
-    targetUrl: contents.getURL(),
   });
   owner.focus();
   win.showInactive();
@@ -192,7 +229,7 @@ function showKeyboardForContents(contents: WebContents) {
 
 function hideKeyboard() {
   if (currentTargetId) {
-    console.log("[keyboard-main] teclado escondido", { targetWebContentsId: currentTargetId });
+    logKeyboard("[keyboard-main] teclado escondido", { targetWebContentsId: currentTargetId });
   }
   currentTargetId = 0;
   keyboardVisible = false;
@@ -291,18 +328,21 @@ function registerKeyboardIpc() {
   keyboardIpcRegistered = true;
 
   ipcMain.handle(SHOW_CHANNEL, async (event) => {
+    assertTrustedKeyboardClientUrl(getEventUrl(event), SHOW_CHANNEL);
     showKeyboardForContents(event.sender);
     return { success: true };
   });
 
   ipcMain.handle(HIDE_CHANNEL, async (event) => {
+    assertTrustedKeyboardClientUrl(getEventUrl(event), HIDE_CHANNEL);
     if (event.sender.id === currentTargetId) {
       hideKeyboard();
     }
     return { success: true };
   });
 
-  ipcMain.handle(ACTION_CHANNEL, async (_event, action: { kind: string; text?: string }) => {
+  ipcMain.handle(ACTION_CHANNEL, async (event, action: { kind: string; text?: string }) => {
+    assertTrustedRendererUrl(getEventUrl(event), ACTION_CHANNEL);
     return applyKeyboardAction(action);
   });
 }
@@ -685,6 +725,7 @@ async function injectDetector(mainWindow: BrowserWindow) {
     const currentUrl = mainWindow.webContents.getURL();
     if (!currentUrl || currentUrl === "about:blank") return;
     if (isGovUnstableUrl(currentUrl)) return;
+    if (!isTrustedKeyboardClientUrl(currentUrl)) return;
 
     const wc = mainWindow.webContents as unknown as Record<string, string>;
     if (wc[LAST_INJECTED_URL_FLAG] === currentUrl) return;
@@ -695,7 +736,7 @@ async function injectDetector(mainWindow: BrowserWindow) {
 
     results.forEach((result, index) => {
       if (result.status === "fulfilled") {
-        console.log("[keyboard-inject] frame ok", index);
+        logKeyboard("[keyboard-inject] frame ok", index);
       } else {
         console.error("[keyboard-inject] frame fail", index, result.reason);
       }

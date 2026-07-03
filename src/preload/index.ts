@@ -6,6 +6,35 @@ const DEFAULT_SPEECH_API_URL = 'https://lpxsine.vercel.app/api/speech-to-text'
 const DEFAULT_SPEECH_FALLBACK_API_URL = 'https://lpxsine.vercel.app/api/jobs-voice-assistant'
 const JOBS_SNAPSHOT_URL = 'https://vagas.jacarezinho.cloud/api/v1/vagas-semana'
 const SPEECH_REQUEST_TIMEOUT_MS = 15000
+const TRUSTED_APP_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  'lpxsine.vercel.app',
+  'jacarezinho.govbr.cloud',
+  'jacarezinho.pr.gov.br',
+  'www.jacarezinho.pr.gov.br',
+  'webapp1-jacarezinho.cidade360.cloud',
+  'duvidas-mei.vercel.app',
+  'totemvoz.vercel.app'
+])
+const TRUSTED_KEYBOARD_HOSTS = new Set(['servicos.mte.gov.br', 'sso.acesso.gov.br', 'acesso.gov.br'])
+const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development'
+
+function isTrustedAppPage() {
+  const { protocol, hostname } = window.location
+  if (protocol === 'file:') return true
+  if (protocol !== 'http:' && protocol !== 'https:') return false
+  return TRUSTED_APP_HOSTS.has(hostname.toLowerCase())
+}
+
+function isTrustedKeyboardPage() {
+  const { protocol, hostname } = window.location
+  if (protocol === 'file:') return true
+  if (protocol !== 'http:' && protocol !== 'https:') return false
+
+  const normalizedHost = hostname.toLowerCase()
+  return TRUSTED_APP_HOSTS.has(normalizedHost) || TRUSTED_KEYBOARD_HOSTS.has(normalizedHost)
+}
 
 function resolveSpeechApiUrl() {
   try {
@@ -329,18 +358,54 @@ function installKeyboardFocusDetector() {
 const isKeyboardRendererRoute =
   window.location.hash === '#/keyboard' || window.location.hash.startsWith('#/keyboard?')
 
-if (!isKeyboardRendererRoute) {
+if (!isKeyboardRendererRoute && isTrustedKeyboardPage()) {
   installKeyboardFocusDetector()
+}
+
+const keyboardOnlyTotemApi = {
+  keyboardShow: totemApi.keyboardShow,
+  keyboardHide: totemApi.keyboardHide,
+  keyboardAction: totemApi.keyboardAction,
+  onKeyboardReset: totemApi.onKeyboardReset
 }
 
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
-    contextBridge.exposeInMainWorld('totem', totemApi)
-    contextBridge.exposeInMainWorld('totemGov', totemGovApi)
+    contextBridge.exposeInMainWorld('totem', isTrustedAppPage() ? totemApi : keyboardOnlyTotemApi)
 
-    contextBridge.exposeInMainWorld('totemVoz', {
+    if (isTrustedAppPage()) {
+      contextBridge.exposeInMainWorld('totemGov', totemGovApi)
+    }
+
+    if (isTrustedAppPage()) {
+      contextBridge.exposeInMainWorld('totemVoz', {
+        async transcrever(audioBase64: string) {
+          try {
+            return await fetchSpeechTranscript(audioBase64)
+          } catch (error) {
+            console.warn('[preload] fetch direto da fala falhou, usando fallback IPC:', error)
+            const texto = await ipcRenderer.invoke('totem-voz-transcrever', audioBase64)
+            return texto as string
+          }
+        }
+      })
+    }
+  } catch (error) {
+    console.error('[preload] erro ao expor APIs:', error)
+  }
+} else {
+  window.electron = electronAPI
+  window.api = api
+  window.totem = isTrustedAppPage() ? totemApi : keyboardOnlyTotemApi
+
+  if (isTrustedAppPage()) {
+    window.totemGov = totemGovApi
+  }
+
+  if (isTrustedAppPage()) {
+    window.totemVoz = {
       async transcrever(audioBase64: string) {
         try {
           return await fetchSpeechTranscript(audioBase64)
@@ -350,27 +415,10 @@ if (process.contextIsolated) {
           return texto as string
         }
       }
-    })
-  } catch (error) {
-    console.error('[preload] erro ao expor APIs:', error)
-  }
-} else {
-  window.electron = electronAPI
-  window.api = api
-  window.totem = totemApi
-  window.totemGov = totemGovApi
-
-  window.totemVoz = {
-    async transcrever(audioBase64: string) {
-      try {
-        return await fetchSpeechTranscript(audioBase64)
-      } catch (error) {
-        console.warn('[preload] fetch direto da fala falhou, usando fallback IPC:', error)
-        const texto = await ipcRenderer.invoke('totem-voz-transcrever', audioBase64)
-        return texto as string
-      }
     }
   }
 
-  console.log('[preload] APIs do totem registradas')
+  if (isDev) {
+    console.log('[preload] APIs do totem registradas')
+  }
 }
