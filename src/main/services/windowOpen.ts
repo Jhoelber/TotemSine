@@ -194,6 +194,9 @@ export function registerOpenInSameWindow(mainWindow: BrowserWindow) {
   mainWindow.webContents.on('will-navigate', (e, url) => {
     if (isGovSensitiveUrl(url)) {
       e.preventDefault()
+      try {
+        mainWindow.webContents.stop()
+      } catch {}
       console.log('[gov-window] will-navigate interceptado', url)
       openGovWindow(mainWindow, url)
       return

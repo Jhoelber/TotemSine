@@ -162,6 +162,13 @@ declare global {
         isBackspace?: boolean
         isEnter?: boolean
       }) => Promise<{ success: boolean }>
+      keyboardShow?: () => Promise<{ success: boolean }>
+      keyboardHide?: () => Promise<{ success: boolean }>
+      keyboardAction?: (payload: {
+        kind: string
+        text?: string
+      }) => Promise<{ success: boolean }>
+      onKeyboardReset?: (callback: () => void) => () => void
       resetToHome?: () => Promise<{ success: boolean; failureReason?: string }>
     }
   }
@@ -181,11 +188,149 @@ const totemApi = {
     isBackspace?: boolean
     isEnter?: boolean
   }) => ipcRenderer.invoke('totem-type-key', payload),
+  keyboardShow: () => ipcRenderer.invoke('totem-keyboard-show'),
+  keyboardHide: () => ipcRenderer.invoke('totem-keyboard-hide'),
+  keyboardAction: (payload: { kind: string; text?: string }) =>
+    ipcRenderer.invoke('totem-keyboard-action', payload),
+  onKeyboardReset: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('totem-keyboard-reset', listener)
+    return () => {
+      ipcRenderer.removeListener('totem-keyboard-reset', listener)
+    }
+  },
   resetToHome: () => ipcRenderer.invoke('totem-reset-to-home')
 }
 
 const totemGovApi = {
   close: (action?: 'back' | 'exit') => ipcRenderer.invoke('totem-gov-close', action)
+}
+
+function isEditableElement(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+
+  if (target instanceof HTMLInputElement) {
+    return (
+      !target.readOnly &&
+      !target.disabled &&
+      ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].includes(target.type)
+    )
+  }
+
+  if (target instanceof HTMLTextAreaElement) {
+    return !target.readOnly && !target.disabled
+  }
+
+  return target.isContentEditable
+}
+
+function isInteractiveElement(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+
+  return Boolean(
+    target.closest(
+      [
+        'a[href]',
+        'button',
+        'input',
+        'select',
+        'textarea',
+        'label',
+        'iframe',
+        'canvas',
+        'svg',
+        '[role="button"]',
+        '[role="link"]',
+        '[role="checkbox"]',
+        '[role="radio"]',
+        '[role="dialog"]',
+        '[aria-modal="true"]',
+        '[tabindex]',
+        '[class*="captcha" i]',
+        '[id*="captcha" i]',
+        '[class*="challenge" i]',
+        '[id*="challenge" i]'
+      ].join(',')
+    )
+  )
+}
+
+function installKeyboardFocusDetector() {
+  const globalState = globalThis as typeof globalThis & {
+    __LPX_PRELOAD_KEYBOARD_DETECTOR__?: boolean
+  }
+
+  if (globalState.__LPX_PRELOAD_KEYBOARD_DETECTOR__) return
+  globalState.__LPX_PRELOAD_KEYBOARD_DETECTOR__ = true
+  const isGovHost = location.hostname === 'sso.acesso.gov.br' || location.hostname === 'acesso.gov.br'
+  let suppressGovOutsideClickUntil = 0
+
+  const isSuppressedGovOutsideClick = (event: Event) => {
+    return (
+      isGovHost &&
+      Date.now() < suppressGovOutsideClickUntil &&
+      !isEditableElement(event.target) &&
+      !isInteractiveElement(event.target)
+    )
+  }
+
+  const consumeEvent = (event: Event) => {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
+
+  const showKeyboard = () => {
+    ipcRenderer.invoke('totem-keyboard-show').catch(() => {})
+  }
+
+  const hideKeyboard = () => {
+    ipcRenderer.invoke('totem-keyboard-hide').catch(() => {})
+  }
+
+  const maybeShowKeyboard = (event: Event) => {
+    if (isSuppressedGovOutsideClick(event)) {
+      consumeEvent(event)
+      return
+    }
+    if (!isEditableElement(event.target)) return
+    showKeyboard()
+  }
+
+  const maybeHideKeyboard = (event: Event) => {
+    if (isEditableElement(event.target)) return
+    if (isGovHost) {
+      if (isInteractiveElement(event.target)) return
+      suppressGovOutsideClickUntil = Date.now() + 700
+      consumeEvent(event)
+      hideKeyboard()
+      return
+    }
+    setTimeout(() => {
+      if (!isEditableElement(document.activeElement)) {
+        hideKeyboard()
+      }
+    }, 60)
+  }
+
+  const consumeSuppressedGovOutsideClick = (event: Event) => {
+    if (!isSuppressedGovOutsideClick(event)) return
+    consumeEvent(event)
+  }
+
+  window.addEventListener('click', consumeSuppressedGovOutsideClick, true)
+  window.addEventListener('pointerup', maybeShowKeyboard, true)
+  window.addEventListener('mouseup', consumeSuppressedGovOutsideClick, true)
+  window.addEventListener('mouseup', maybeShowKeyboard, true)
+  window.addEventListener('touchend', consumeSuppressedGovOutsideClick, true)
+  window.addEventListener('touchend', maybeShowKeyboard, true)
+  window.addEventListener('pointerdown', maybeHideKeyboard, true)
+}
+
+const isKeyboardRendererRoute =
+  window.location.hash === '#/keyboard' || window.location.hash.startsWith('#/keyboard?')
+
+if (!isKeyboardRendererRoute) {
+  installKeyboardFocusDetector()
 }
 
 if (process.contextIsolated) {

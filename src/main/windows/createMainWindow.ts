@@ -9,11 +9,14 @@ export function createMainWindow() {
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
-    frame: false,
     show: false,
+    frame: false,
+    thickFrame: false,
     fullscreen: true,
     kiosk: true,
     autoHideMenuBar: true,
+    hasShadow: false,
+    roundedCorners: false,
     ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),

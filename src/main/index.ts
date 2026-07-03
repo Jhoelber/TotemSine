@@ -1,6 +1,8 @@
 // src/main/index.ts
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, session } from "electron";
+import fs from "node:fs";
+import path from "node:path";
 
 import { createMainWindow } from "./windows/createMainWindow";
 import { registerIpc } from "./ipc";
@@ -16,13 +18,23 @@ import { isTrustedMediaOrigin } from "./security/trustedOrigins";
 
 const isDev = !app.isPackaged;
 
+const appDataRoot = app.getPath("appData");
+const localDataRoot = path.join(appDataRoot, "totemSine");
+const sessionDataRoot = path.join(localDataRoot, "session");
+const cacheDataRoot = path.join(localDataRoot, "cache");
+
+for (const dir of [localDataRoot, sessionDataRoot, cacheDataRoot]) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+app.setPath("userData", localDataRoot);
+app.setPath("sessionData", sessionDataRoot);
+app.commandLine.appendSwitch("disk-cache-dir", cacheDataRoot);
+
 if (!isDev) {
   app.commandLine.appendSwitch("kiosk-printing");
 }
 
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch("disable-gpu");
-app.commandLine.appendSwitch("disable-gpu-compositing");
 app.commandLine.appendSwitch("use-fake-ui-for-media-stream");
 
 let mainWindow: BrowserWindow | null = null;

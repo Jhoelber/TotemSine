@@ -1,13 +1,14 @@
-const App = () => {
+import { useLocation } from 'react-router-dom'
+import KeyboardPage from './components/KeyboardPage'
 
-  return (
+function App(): JSX.Element {
+  const location = useLocation()
 
-    <div className="">
+  if (location.pathname === '/keyboard') {
+    return <KeyboardPage />
+  }
 
-
-    </div>
-
-  )
+  return <div />
 }
 
 export default App
