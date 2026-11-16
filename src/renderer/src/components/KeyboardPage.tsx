@@ -92,8 +92,8 @@ function labelForKey(key: KeyboardKey, shiftEnabled: boolean, symbolsEnabled: bo
   if (key === 'symbols') return '?123'
   if (key === 'letters') return 'ABC'
   if (key === 'hide') return 'Cancelar'
-  if (key === 'space') return 'Espaco'
-  if (key === 'enter') return 'Avancar'
+  if (key === 'space') return 'Espaço'
+  if (key === 'enter') return 'Avançar'
   if (key === 'backspace') return 'Apagar'
   if (key === 'shift') return 'Shift'
 
@@ -230,31 +230,32 @@ export default function KeyboardPage(): JSX.Element {
   return (
     <main
       className="h-screen w-screen overflow-hidden bg-transparent text-white"
+      style={{ fontFamily: '"Public Sans", "Segoe UI", system-ui, Arial, sans-serif' }}
       onPointerDown={() => {
         void hideKeyboard()
       }}
     >
       <section
-        className="mx-auto mt-[2px] flex h-[calc(100%-2px)] w-full flex-col rounded-t-[30px] bg-[radial-gradient(circle_at_top,rgba(114,197,255,0.14),transparent_28%),linear-gradient(180deg,#17486f_0%,#143f64_52%,#113857_100%)] px-5 pb-1 pt-2"
+        className="mx-auto mt-[2px] flex h-[calc(100%-2px)] w-full flex-col rounded-t-[28px] border-t-[5px] border-[#FFCD07] bg-[#0C326F] px-5 pb-1 pt-2"
         onPointerDown={(event) => {
           event.stopPropagation()
         }}
       >
-        <div className="relative mx-auto flex w-full max-w-[1160px] items-center justify-center">
-          <div className="h-[6px] w-[62px] rounded-full bg-white/30" />
+        <div className="relative mx-auto flex h-[50px] w-full max-w-[1160px] items-center justify-center">
+          <div className="h-[6px] w-[62px] rounded-full bg-white/25" />
 
           <button
-            className={`absolute right-0 grid min-w-[106px] place-items-center rounded-[18px] bg-[linear-gradient(180deg,#5f83a3_0%,#517694_100%)] px-5 leading-none text-white shadow-[0_10px_28px_rgba(8,27,45,0.22)] ${compactFooter ? 'h-[44px] text-[15px]' : 'h-[50px] text-[16px]'} font-semibold`}
+            className={`absolute right-0 grid min-w-[150px] place-items-center rounded-full border-2 border-white/40 bg-transparent px-6 leading-none text-white transition active:scale-95 active:bg-white/15 ${compactFooter ? 'h-[44px] text-[16px]' : 'h-[50px] text-[17px]'} font-bold`}
             onClick={() => {
               void hideKeyboard()
             }}
             type="button"
           >
-            <span>Fechar</span>
+            <span>Fechar teclado</span>
           </button>
         </div>
 
-        <div className="mt-2 text-center text-[12px] font-semibold tracking-[0.01em] text-white/90">
+        <div className="-mt-[22px] text-center text-[14px] font-semibold text-[#DBE6FB]">
           {pendingAccent
             ? `Acento selecionado: ${pendingAccent}`
             : 'Toque nas teclas para preencher o campo selecionado'}
@@ -278,15 +279,15 @@ export default function KeyboardPage(): JSX.Element {
                 const baseMinWidth = compactFooter ? 'min-w-[90px]' : 'min-w-[100px]'
 
                 const className = [
-                  `flex ${baseKeyHeight} ${baseMinWidth} items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,#ffffff_0%,#eef4fb_100%)] px-4 text-[17px] font-semibold text-[#11263a] shadow-[0_8px_20px_rgba(8,27,45,0.10)]`,
+                  `flex ${baseKeyHeight} ${baseMinWidth} items-center justify-center rounded-[14px] bg-white px-4 text-[20px] font-bold text-[#0C326F] shadow-[0_3px_0_rgba(0,0,0,0.25)] transition-transform active:translate-y-[2px] active:bg-[#E5EEFB] active:shadow-none`,
                   isToggle
-                    ? `${compactFooter ? 'min-w-[108px] text-[15px]' : 'min-w-[122px] text-[16px]'} text-[#16324c]`
+                    ? `${compactFooter ? 'min-w-[108px] text-[15px]' : 'min-w-[122px] text-[16px]'} !bg-[#C9D9F5] text-[#0C326F]`
                     : '',
                   isBackspace
-                    ? `${compactFooter ? 'min-w-[112px]' : 'min-w-[126px]'} flex-col gap-0.5 text-[12px] font-medium text-[#16324c]`
+                    ? `${compactFooter ? 'min-w-[112px]' : 'min-w-[126px]'} flex-col gap-0.5 !bg-[#C9D9F5] !text-[13px] font-semibold text-[#0C326F]`
                     : '',
                   isActive
-                    ? 'bg-[linear-gradient(180deg,#9cecf4_0%,#75dce8_100%)] text-[#07364e]'
+                    ? '!bg-[#FFCD07] text-[#0C326F]'
                     : ''
                 ]
                   .filter(Boolean)
@@ -303,14 +304,14 @@ export default function KeyboardPage(): JSX.Element {
                   >
                     {key === 'shift' ? (
                       <span className="flex items-center gap-2">
-                        <span className="text-[20px] leading-none">^</span>
+                        <span className="text-[22px] leading-none">⇧</span>
                         <span>{label}</span>
                       </span>
                     ) : null}
 
                     {key === 'backspace' ? (
                       <>
-                        <span className="text-[20px] leading-none">{'<'}</span>
+                        <span className="text-[22px] leading-none">⌫</span>
                         <span className="leading-none">{label}</span>
                       </>
                     ) : null}
@@ -325,13 +326,13 @@ export default function KeyboardPage(): JSX.Element {
 
         <div className="mx-auto mt-2 flex w-full max-w-[1160px] items-center">
           <button
-            className={`flex w-full items-center justify-center rounded-[22px] bg-[linear-gradient(180deg,#ffffff_0%,#eef4fb_100%)] font-semibold text-[#11263a] shadow-[0_10px_24px_rgba(8,27,45,0.10)] ${compactFooter ? 'h-[46px] text-[16px]' : 'h-[52px] text-[17px]'}`}
+            className={`flex w-full items-center justify-center rounded-[14px] bg-white font-bold text-[#0C326F] shadow-[0_3px_0_rgba(0,0,0,0.25)] transition-transform active:translate-y-[2px] active:bg-[#E5EEFB] active:shadow-none ${compactFooter ? 'h-[46px] text-[17px]' : 'h-[52px] text-[18px]'}`}
             onClick={() => {
               void handleKey('space')
             }}
             type="button"
           >
-            Espaco
+            Espaço
           </button>
         </div>
       </section>

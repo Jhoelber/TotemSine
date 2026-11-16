@@ -3,10 +3,11 @@ import { join } from 'path'
 import { START_URL } from '../config/constants'
 import { registerKeyboardAvoidance } from './keyboardAvoidance'
 import { logSecurityError, logSecurityInfo, logSecurityWarn } from './securityLog'
+import { SINE_BASE_CSS, SINE_COLORS, SINE_ICONS } from './sineUi'
 
 const GOV_HOSTS = new Set(['servicos.mte.gov.br', 'sso.acesso.gov.br', 'acesso.gov.br'])
 const GOV_LOGIN_URL = 'https://servicos.mte.gov.br/spme-v2/#/login'
-const TOP_BAR_HEIGHT = 60
+const TOP_BAR_HEIGHT = 88
 const CONTROL_BACK_CHANNEL = 'lpx-gov-control-back'
 const CONTROL_CLOSE_CHANNEL = 'lpx-gov-control-close'
 const GOV_AUTH_SAME_URL_RETRY_LIMIT = 1
@@ -125,6 +126,9 @@ function getDisplayBounds(referenceWindow: BrowserWindow) {
   return screen.getDisplayMatching(referenceWindow.getBounds()).bounds
 }
 
+const GOV_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
+
 function buildGovShellHtml() {
   return `
     <!doctype html>
@@ -132,83 +136,89 @@ function buildGovShellHtml() {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta
-          http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
-        />
+        <meta http-equiv="Content-Security-Policy" content="${GOV_CSP}" />
         <style>
-          :root {
-            color-scheme: light;
-          }
-
-          * {
-            box-sizing: border-box;
-          }
-
-          html, body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #ffffff;
-            font-family: Arial, sans-serif;
-          }
+          ${SINE_BASE_CSS}
+          html, body { width: 100%; height: 100%; overflow: hidden; background: #fff; }
 
           .bar {
-            width: 100%;
+            position: relative;
             height: 100%;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 10px;
+            gap: 24px;
+            padding: 0 32px 4px;
           }
-
-          .button {
-            background-color: #eee;
-            border: 0.5px solid #ccc;
-            border-radius: 7px;
-            color: black;
-            padding: 8px 14px;
-            font-size: 12px;
-            cursor: pointer;
+          .bar::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4px;
+            background: ${SINE_COLORS.amarelo};
           }
-
-          .spacer {
+          .bar .sine-btn { min-height: 60px; font-size: 21px; }
+          .titulo {
             flex: 1;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: ${SINE_COLORS.texto2};
           }
+          .titulo b { color: ${SINE_COLORS.azul90}; font-weight: 800; }
         </style>
       </head>
       <body>
         <div class="bar">
-          <button class="button" id="gov-back">Voltar</button>
-          <div class="spacer"></div>
-          <button class="button" id="gov-exit">Sair</button>
+          <button class="sine-btn sine-btn--sec" id="gov-back" type="button">${SINE_ICONS.voltar}Voltar</button>
+          <div class="titulo"><b>Carteira de Trabalho Digital</b> · portal oficial gov.br</div>
+          <button class="sine-btn sine-btn--pri" id="gov-exit" type="button">${SINE_ICONS.inicio}Voltar ao início</button>
         </div>
 
         <script>
-          const bind = () => {
-            const back = document.getElementById("gov-back");
-            const exit = document.getElementById("gov-exit");
-
-            if (back) {
-              back.addEventListener("click", () => {
-                window.totemGovControls?.back?.();
-              });
-            }
-
-            if (exit) {
-              exit.addEventListener("click", () => {
-                window.totemGovControls?.exit?.();
-              });
-            }
-          };
-
-          bind();
+          document.getElementById("gov-back")?.addEventListener("click", () => {
+            window.totemGovControls?.back?.();
+          });
+          document.getElementById("gov-exit")?.addEventListener("click", () => {
+            window.totemGovControls?.exit?.();
+          });
         </script>
       </body>
     </html>
   `
 }
+
+const GOV_PAGE_CSS = `
+  ${SINE_BASE_CSS}
+  html, body { width: 100%; height: 100%; overflow: hidden; background: ${SINE_COLORS.fundo}; }
+  body { display: flex; align-items: center; justify-content: center; }
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    max-width: 760px;
+    padding: 56px 64px;
+    border-radius: 32px;
+    background: #fff;
+    border: 2px solid ${SINE_COLORS.borda};
+    text-align: center;
+  }
+  .title { font-size: 40px; font-weight: 900; line-height: 1.15; color: ${SINE_COLORS.azul90}; }
+  .detail { font-size: 24px; line-height: 1.45; color: ${SINE_COLORS.texto2}; }
+  .icone {
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: #FFF4C2;
+    color: #8A6A00;
+  }
+  .icone svg { width: 52px; height: 52px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .acoes { margin-top: 12px; display: flex; gap: 16px; }
+`
 
 function buildGovLoadingHtml() {
   return `
@@ -217,77 +227,21 @@ function buildGovLoadingHtml() {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta
-          http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
-        />
-        <style>
-          html, body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
-            font-family: Arial, sans-serif;
-          }
-
-          body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .wrap {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 18px;
-            color: #0f172a;
-            text-align: center;
-            padding: 24px;
-          }
-
-          .spinner {
-            width: 58px;
-            height: 58px;
-            border-radius: 999px;
-            border: 6px solid #dbeafe;
-            border-top-color: #2563eb;
-            animation: spin 0.9s linear infinite;
-          }
-
-          .title {
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: 0.01em;
-          }
-
-          .subtitle {
-            font-size: 18px;
-            color: #475569;
-            max-width: 520px;
-            line-height: 1.45;
-          }
-
-          @keyframes spin {
-            to {
-              transform: rotate(360deg);
-            }
-          }
-        </style>
+        <meta http-equiv="Content-Security-Policy" content="${GOV_CSP}" />
+        <style>${GOV_PAGE_CSS}</style>
       </head>
       <body>
         <div class="wrap">
-          <div class="spinner"></div>
-          <div class="title">Abrindo Carteira de Trabalho Digital</div>
-          <div class="subtitle">Aguarde alguns instantes enquanto carregamos o portal oficial.</div>
+          <div class="sine-spinner"></div>
+          <div class="title">Abrindo a Carteira de Trabalho Digital</div>
+          <div class="detail">Aguarde um instante enquanto carregamos o portal oficial do governo.</div>
         </div>
       </body>
     </html>
   `
 }
 
-function buildGovStatusHtml(message: string, detail: string, retryUrl?: string) {
+function buildGovStatusHtml(message: string, detail: string, retryUrl?: string, loading = false) {
   const escapeHtml = (value: string) =>
     String(value || '').replace(/[&<>"']/g, (char) => {
       const map: Record<string, string> = {
@@ -311,66 +265,19 @@ function buildGovStatusHtml(message: string, detail: string, retryUrl?: string) 
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta
-          http-equiv="Content-Security-Policy"
-          content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;"
-        />
-        <style>
-          html, body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%);
-            font-family: Arial, sans-serif;
-          }
-
-          body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .wrap {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-            text-align: center;
-            padding: 24px;
-            max-width: 640px;
-          }
-
-          .title {
-            font-size: 28px;
-            font-weight: 700;
-            color: #0f172a;
-          }
-
-          .detail {
-            font-size: 18px;
-            color: #475569;
-            line-height: 1.45;
-          }
-
-          .retry {
-            margin-top: 8px;
-            padding: 12px 22px;
-            border: 0;
-            border-radius: 12px;
-            background: #2563eb;
-            color: #ffffff;
-            font-size: 18px;
-            font-weight: 700;
-            cursor: pointer;
-          }
-        </style>
+        <meta http-equiv="Content-Security-Policy" content="${GOV_CSP}" />
+        <style>${GOV_PAGE_CSS}</style>
       </head>
       <body>
         <div class="wrap">
+          ${loading ? '<div class="sine-spinner"></div>' : `<div class="icone">${SINE_ICONS.alerta}</div>`}
           <div class="title">${safeMessage}</div>
           <div class="detail">${safeDetail}</div>
-          ${retryUrl ? `<button class="retry" id="retry-gov">Tentar novamente</button>` : ''}
+          ${
+            retryUrl
+              ? `<div class="acoes"><button class="sine-btn sine-btn--pri" id="retry-gov" type="button">${SINE_ICONS.repetir}Tentar novamente</button></div>`
+              : ''
+          }
         </div>
         ${
           retryUrl
@@ -391,7 +298,9 @@ function showGovStatus(message: string, detail = 'Aguarde alguns instantes.') {
 
   void govContentWindow
     .loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(buildGovStatusHtml(message, detail))}`
+      `data:text/html;charset=utf-8,${encodeURIComponent(
+        buildGovStatusHtml(message, detail, undefined, message.startsWith('Recuperando'))
+      )}`
     )
     .catch(() => {})
 }
@@ -579,7 +488,7 @@ function loadGovUrl(url: string, attempt = 0) {
   if (!govContentWindow || govContentWindow.isDestroyed()) return
   if (!isAllowedGovContentUrl(url)) {
     logSecurityWarn('[gov-window] bloqueado loadURL fora da allowlist', { url, attempt })
-    showGovStatus('Navegacao bloqueada', 'O destino solicitado nao faz parte do portal oficial.')
+    showGovStatus('Navegação bloqueada', 'Este endereço não faz parte do portal oficial.')
     return
   }
 
@@ -743,7 +652,7 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
     if (!isAllowedGovContentUrl(nextUrl)) {
       event.preventDefault()
       logSecurityWarn('[gov-window] navegacao bloqueada fora da allowlist', { url: nextUrl })
-      showGovStatus('Navegacao bloqueada', 'O destino solicitado nao faz parte do portal oficial.')
+      showGovStatus('Navegação bloqueada', 'Este endereço não faz parte do portal oficial.')
     }
   })
 
@@ -753,7 +662,7 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
       logSecurityWarn('[gov-window] redirecionamento bloqueado fora da allowlist', { url: nextUrl })
       showGovStatus(
         'Redirecionamento bloqueado',
-        'O destino solicitado nao faz parte do portal oficial.'
+        'Este endereço não faz parte do portal oficial.'
       )
     }
   })
@@ -792,8 +701,8 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
 
     if (recovering) {
       showGovStatus(
-        'Nao foi possivel abrir o login do Gov.br',
-        'A tela de autenticacao apresentou instabilidade. Toque em Voltar ou tente novamente em instantes.'
+        'Não foi possível abrir o login do gov.br',
+        'O portal do governo está instável. Toque em Voltar ou tente de novo em instantes.'
       )
       loadGovUrl(GOV_LOGIN_URL)
       recovering = false
@@ -814,7 +723,7 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
       recovering = true
       showGovStatus(
         'Recuperando acesso',
-        'O portal do Gov.br apresentou uma instabilidade. Tentando novamente.'
+        'O portal do gov.br ficou instável. Estamos tentando de novo.'
       )
       setTimeout(() => {
         recovering = false
@@ -825,8 +734,8 @@ function ensureGovWindows(parentWindow: BrowserWindow) {
 
     recovering = false
     showGovRetryStatus(
-      'Nao foi possivel abrir o login do Gov.br',
-      'A tela de autenticacao apresentou instabilidade repetida. Toque em tentar novamente ou use Voltar para retornar ao sistema.',
+      'Não foi possível abrir o login do gov.br',
+      'O portal do governo continua instável. Toque em Tentar novamente ou em Voltar ao início.',
       GOV_LOGIN_URL
     )
   })
