@@ -420,22 +420,50 @@ const DETECTOR_SCRIPT = `
       layoutCaptured = false;
     }
 
+    // Telas que ocupam a altura exata da tela (100vh, overflow hidden) nao rolam como um todo,
+    // entao rolar a janela nao tira o campo de baixo do teclado. Nesses casos a pagina inteira
+    // sobe so o necessario (transform no body) e volta ao fechar o teclado.
+    let pageShift = 0;
+    let originalBodyTransform = null;
+
+    function setPageShift(next) {
+      if (!document.body) return;
+      const value = Math.max(0, Math.min(Math.round(next), keyboardHeight + 40));
+      if (value === pageShift) return;
+      if (originalBodyTransform === null) originalBodyTransform = document.body.style.transform || "";
+      pageShift = value;
+      document.body.style.transform = value ? "translateY(-" + value + "px)" : originalBodyTransform;
+    }
+
+    function resetPageShift() {
+      if (!document.body || originalBodyTransform === null) return;
+      document.body.style.transform = originalBodyTransform;
+      originalBodyTransform = null;
+      pageShift = 0;
+    }
+
     function keepFieldVisible() {
       if (!keyboardVisible) return;
       const field = resolveField();
       if (!field) return;
-      try {
-        field.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
-      } catch {}
-      const rect = field.getBoundingClientRect();
       const safeBottom = window.innerHeight - keyboardHeight - 28;
-      if (rect.bottom > safeBottom) {
-        const delta = rect.bottom - safeBottom;
-        window.scrollBy({ top: delta, left: 0, behavior: "auto" });
-      } else if (rect.top < 20) {
-        const delta = rect.top - 20;
-        window.scrollBy({ top: delta, left: 0, behavior: "auto" });
+      if (!pageShift) {
+        try {
+          field.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+        } catch {}
+        let rect = field.getBoundingClientRect();
+        if (rect.bottom > safeBottom) {
+          window.scrollBy({ top: rect.bottom - safeBottom, left: 0, behavior: "auto" });
+        } else if (rect.top < 20) {
+          window.scrollBy({ top: rect.top - 20, left: 0, behavior: "auto" });
+        }
       }
+      // se ainda estiver atras do teclado (ou se a pagina ja subiu), ajusta o deslocamento:
+      // o campo fica logo acima do teclado e a pagina desce de volta quando ha espaco
+      const rect = field.getBoundingClientRect();
+      let next = pageShift + (rect.bottom - safeBottom);
+      if (rect.top - (next - pageShift) < 20) next = pageShift + (rect.top - 20);
+      setPageShift(next);
     }
 
     async function showKeyboard() {
@@ -458,6 +486,7 @@ const DETECTOR_SCRIPT = `
     async function hideKeyboard() {
       if (!window.totem || typeof window.totem.keyboardHide !== "function") return;
       keyboardVisible = false;
+      resetPageShift();
       if (!isGovHost) {
         restoreLayoutState();
       }
