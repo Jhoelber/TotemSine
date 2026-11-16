@@ -3,6 +3,11 @@ import path from 'path'
 import fs from 'fs'
 import { pathToFileURL } from 'url'
 import { ALLOWED_URLS_DOWNLOAD_OVERLAY, LIBRE_OFFICE_PATH, START_URL } from '../config/constants'
+import { SINE_BASE_CSS, SINE_COLORS, SINE_FONT, SINE_ICONS } from './sineUi'
+
+const PRINT_ICON_URL = `data:image/svg+xml,${encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'><path d='M7 9V3h10v6M7 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2'/><rect x='7' y='14' width='10' height='7'/></svg>"
+)}`
 
 const libre = require('libreoffice-convert')
 const pdfJsModuleUrl = pathToFileURL(require.resolve('pdfjs-dist/build/pdf.mjs')).toString()
@@ -160,125 +165,60 @@ function createPdfViewerHtml(pdfBase64: string, pdfPath: string) {
         />
         <title>Visualizador PDF</title>
         <style>
-          :root {
-            --bg: #334155;
-            --toolbar: rgba(17, 24, 39, 0.96);
-            --panel: rgba(8, 47, 73, 0.94);
-            --primary: #c62828;
-            --primary-dark: #a61f1f;
-            --text: #f8fafc;
-            --muted: #cbd5e1;
-          }
-
-          * { box-sizing: border-box; }
-          body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-          }
+          ${SINE_BASE_CSS}
+          body { background: #5B6678; color: #fff; }
 
           .toolbar {
             position: sticky;
             top: 0;
             z-index: 10;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            gap: 16px;
-            padding: 14px 18px;
-            background: var(--toolbar);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+            gap: 24px;
+            padding: 16px 32px 20px;
+            background: #fff;
+            color: ${SINE_COLORS.texto};
+            box-shadow: 0 6px 24px rgba(12, 50, 111, 0.18);
           }
-
-          .title strong {
-            display: block;
-            font-size: 20px;
+          .toolbar::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4px;
+            background: ${SINE_COLORS.amarelo};
           }
+          .title { flex: 1; min-width: 0; }
+          .title strong { display: block; font-size: 30px; font-weight: 900; color: ${SINE_COLORS.azul90}; }
+          .title span { display: block; margin-top: 4px; font-size: 19px; color: ${SINE_COLORS.texto2}; }
+          .actions { display: flex; gap: 14px; }
 
-          .title span {
-            color: var(--muted);
-            font-size: 14px;
-          }
-
-          .actions {
-            display: flex;
-            gap: 12px;
-          }
-
-          .actions button {
-            border: 0;
-            border-radius: 10px;
-            padding: 12px 18px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-          }
-
-          .btn-secondary {
-            background: #e5e7eb;
-            color: #111827;
-          }
-
-          .btn-primary {
-            background: var(--primary);
-            color: white;
-          }
-
-          .btn-primary[disabled],
-          .btn-secondary[disabled] {
-            opacity: 0.6;
-            cursor: wait;
-          }
-
-          .btn-primary:active {
-            background: var(--primary-dark);
+          /* o script troca o texto do botao Imprimir; o icone vem do CSS para nao sumir */
+          #print-btn { min-width: 220px; }
+          #print-btn::before {
+            content: "";
+            width: 30px;
+            height: 30px;
+            background: currentColor;
+            -webkit-mask: url("${PRINT_ICON_URL}") center / contain no-repeat;
           }
 
           .hint, .status {
-            margin: 14px auto 0;
+            margin: 20px auto 0;
             width: fit-content;
-            max-width: calc(100vw - 32px);
-            padding: 12px 18px;
+            max-width: calc(100vw - 48px);
+            padding: 16px 28px;
+            border-radius: 20px;
             text-align: center;
-            color: white;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-          }
-
-          .hint {
-            border-radius: 999px;
-            background: var(--panel);
-            font-size: 18px;
+            font-size: 22px;
             font-weight: 700;
           }
+          .hint { background: ${SINE_COLORS.azul10}; color: ${SINE_COLORS.azul90}; }
+          .status { display: none; background: #fff; color: ${SINE_COLORS.texto}; border: 2px solid ${SINE_COLORS.amarelo}; }
 
-          .status {
-            display: none;
-            border-radius: 14px;
-            background: rgba(17, 24, 39, 0.94);
-            font-size: 16px;
-            font-weight: 600;
-          }
-
-          .status-actions {
-            display: none;
-            justify-content: center;
-            gap: 12px;
-            margin-top: 14px;
-          }
-
-          .status-actions.is-visible {
-            display: flex;
-          }
-
-          .status-actions button {
-            border: 0;
-            border-radius: 12px;
-            padding: 12px 18px;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-          }
+          .status-actions { display: none; justify-content: center; gap: 14px; margin-top: 16px; }
+          .status-actions.is-visible { display: flex; }
 
           .print-overlay {
             position: fixed;
@@ -287,115 +227,64 @@ function createPdfViewerHtml(pdfBase64: string, pdfPath: string) {
             display: none;
             align-items: center;
             justify-content: center;
-            background: rgba(15, 23, 42, 0.38);
-            backdrop-filter: blur(2px);
+            background: rgba(12, 50, 111, 0.45);
           }
-
-          .print-overlay.is-visible {
-            display: flex;
-          }
-
+          .print-overlay.is-visible { display: flex; }
           .print-card {
-            min-width: 320px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            min-width: 480px;
             max-width: calc(100vw - 48px);
-            padding: 28px 30px;
-            border-radius: 20px;
-            background: rgba(17, 24, 39, 0.96);
-            color: white;
+            padding: 48px 56px 40px;
+            border-radius: 32px;
+            background: #fff;
+            color: ${SINE_COLORS.texto};
             text-align: center;
-            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
           }
+          .print-card strong { font-size: 34px; font-weight: 900; color: ${SINE_COLORS.azul90}; }
+          .print-card span { font-size: 22px; color: ${SINE_COLORS.texto2}; }
+          .print-card .sine-btn { margin-top: 10px; }
 
-          .print-spinner {
-            width: 54px;
-            height: 54px;
-            margin: 0 auto 16px;
-            border-radius: 50%;
-            border: 5px solid rgba(255, 255, 255, 0.18);
-            border-top-color: #f8fafc;
-            animation: lpx-spin 0.9s linear infinite;
-          }
-
-          .print-card strong {
-            display: block;
-            font-size: 26px;
-            margin-bottom: 8px;
-          }
-
-          .print-card span {
-            display: block;
-            font-size: 18px;
-            color: #cbd5e1;
-          }
-
-          .print-card button {
-            margin-top: 18px;
-            border: 0;
-            border-radius: 12px;
-            padding: 12px 18px;
-            background: #e5e7eb;
-            color: #111827;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-          }
-
-          @keyframes lpx-spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-
-          .viewer {
-            padding: 22px 18px 40px;
-          }
-
+          .viewer { padding: 28px 24px 48px; }
           .page-shell {
-            margin: 0 auto 18px;
+            margin: 0 auto 24px;
             width: fit-content;
-            background: white;
+            background: #fff;
             padding: 10px;
-            border-radius: 6px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
           }
-
-          canvas {
-            display: block;
-            background: white;
-          }
-
-          .loading {
-            padding: 48px 18px;
-            text-align: center;
-            font-size: 18px;
-            font-weight: 700;
-          }
+          canvas { display: block; background: #fff; }
+          .loading { padding: 64px 24px; text-align: center; font-size: 24px; font-weight: 700; }
         </style>
       </head>
       <body>
         <div class="toolbar">
           <div class="title">
-            <strong>Visualizador do PDF</strong>
-            <span>Use o botao Imprimir para enviar direto a impressora padrao.</span>
+            <strong>Confira antes de imprimir</strong>
+            <span>Se estiver tudo certo, toque em Imprimir. A folha sai na impressora do totem.</span>
           </div>
           <div class="actions">
-            <button class="btn-secondary" id="back-btn">Voltar</button>
-            <button class="btn-primary" id="print-btn">Imprimir</button>
-            <button class="btn-secondary" id="exit-btn">Sair</button>
+            <button class="sine-btn sine-btn--sec" id="back-btn" type="button">${SINE_ICONS.voltar}Voltar</button>
+            <button class="sine-btn sine-btn--sec" id="exit-btn" type="button">${SINE_ICONS.inicio}Início</button>
+            <button class="sine-btn sine-btn--ok" id="print-btn" type="button">Imprimir</button>
           </div>
         </div>
 
-        <div class="hint">Seu PDF foi aberto. Clique em Imprimir para continuar.</div>
+        <div class="hint">Role para ver todas as páginas.</div>
         <div class="status" id="print-status"></div>
         <div class="status-actions" id="print-status-actions">
-          <button class="btn-primary" id="retry-print-btn">Tentar novamente</button>
-          <button class="btn-secondary" id="return-print-btn">Voltar</button>
+          <button class="sine-btn sine-btn--pri" id="retry-print-btn" type="button">${SINE_ICONS.repetir}Tentar novamente</button>
+          <button class="sine-btn sine-btn--sec" id="return-print-btn" type="button">${SINE_ICONS.voltar}Voltar</button>
         </div>
         <div class="print-overlay" id="print-overlay">
           <div class="print-card">
-            <div class="print-spinner"></div>
-            <strong>Enviando para impressora</strong>
-            <span>Aguarde um momento...</span>
-            <button id="cancel-print-btn">Cancelar</button>
+            <div class="sine-spinner"></div>
+            <strong>Imprimindo…</strong>
+            <span>Aguarde a folha sair na impressora.</span>
+            <button class="sine-btn sine-btn--sec" id="cancel-print-btn" type="button">Cancelar</button>
           </div>
         </div>
         <div class="viewer" id="viewer-root">
@@ -643,29 +532,35 @@ function showOverlay(mainWindow: BrowserWindow) {
       `
       #loading-overlay {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background-color: rgba(255, 255, 255, 0.8);
+        inset: 0;
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
+        gap: 24px;
+        background: rgba(242, 245, 250, 0.94);
         z-index: 9999;
+        font-family: ${SINE_FONT};
       }
 
       #loading-overlay .spinner {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
+        width: 72px;
+        height: 72px;
         border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        animation: spin 2s linear infinite;
+        border: 8px solid ${SINE_COLORS.azul10};
+        border-top-color: ${SINE_COLORS.azul};
+        animation: lpx-spin 0.9s linear infinite;
       }
 
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+      #loading-overlay .texto {
+        font-size: 30px;
+        font-weight: 800;
+        color: ${SINE_COLORS.azul90};
+        text-align: center;
+      }
+
+      @keyframes lpx-spin {
+        to { transform: rotate(360deg); }
       }
     `
     )
@@ -684,8 +579,7 @@ function showOverlay(mainWindow: BrowserWindow) {
 
         const texto = document.createElement('div');
         texto.className = 'texto';
-        texto.innerText = 'Aguarde um momento, estou convertendo seu documento em PDF';
-        texto.style.cssText = 'margin-left:1em; color:black;background-color: rgba(255, 255, 255, 0.8); padding:2em;';
+        texto.innerText = 'Preparando o documento para impressão…';
         overlay.appendChild(texto);
 
         document.body.appendChild(overlay);

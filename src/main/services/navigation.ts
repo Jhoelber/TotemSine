@@ -369,52 +369,57 @@ const NAVIGATION_SCRIPT = `
         'align-items:center',
         'justify-content:center',
         'z-index:2147483646',
-        'background:rgba(15,23,42,0.36)',
-        'backdrop-filter:blur(2px)'
+        'background:rgba(12,50,111,0.45)'
       ].join(';');
 
       const card = document.createElement('div');
       card.style.cssText = [
-        'width:min(560px, calc(100vw - 32px))',
-        'padding:24px',
-        'border-radius:18px',
+        'width:min(720px, calc(100vw - 48px))',
+        'padding:44px 48px 40px',
+        'border-radius:32px',
         'background:#ffffff',
-        'box-shadow:0 24px 60px rgba(0,0,0,0.26)',
+        'border-top:8px solid #FFCD07',
+        'box-shadow:0 24px 60px rgba(12,50,111,0.25)',
         'text-align:center',
-        'font-family:Arial,sans-serif'
+        'font-family:\"Public Sans\",\"Segoe UI\",system-ui,Arial,sans-serif'
       ].join(';');
 
       const title = document.createElement('strong');
       title.textContent = 'Aviso';
       title.style.cssText = [
         'display:block',
-        'font-size:26px',
-        'margin-bottom:12px',
-        'color:#111827'
+        'font-size:34px',
+        'font-weight:900',
+        'margin-bottom:14px',
+        'color:#0C326F'
       ].join(';');
 
       const message = document.createElement('div');
       message.id = 'lpx-system-alert-message';
       message.style.cssText = [
-        'font-size:22px',
+        'font-size:24px',
         'line-height:1.45',
-        'color:#1f2937',
-        'margin-bottom:20px',
+        'color:#1B1F27',
+        'margin-bottom:28px',
         'white-space:pre-wrap'
       ].join(';');
 
       const button = document.createElement('button');
       button.id = 'lpx-system-alert-ok';
       button.type = 'button';
-      button.textContent = 'OK';
+      button.textContent = 'Entendi';
       button.style.cssText = [
+        'min-width:220px',
+        'min-height:68px',
+        'padding:0 40px',
         'border:0',
-        'border-radius:12px',
-        'padding:14px 28px',
-        'background:#0f766e',
+        'border-radius:999px',
+        'background:#1351B4',
+        'box-shadow:0 6px 16px rgba(19,81,180,0.28)',
         'color:#fff',
-        'font-size:18px',
-        'font-weight:700',
+        'font:inherit',
+        'font-size:24px',
+        'font-weight:800',
         'cursor:pointer'
       ].join(';');
 
@@ -473,27 +478,24 @@ const NAVIGATION_SCRIPT = `
         'justify-content:center',
         'z-index:2147483645',
         'pointer-events:none',
-        'background:radial-gradient(circle at center, rgba(255,255,255,0.18), rgba(224,242,254,0.10) 30%, rgba(15,23,42,0.14) 68%, rgba(15,23,42,0.22) 100%)',
-        'backdrop-filter:blur(18px) saturate(1.05)',
-        '-webkit-backdrop-filter:blur(18px) saturate(1.05)'
+        'background:rgba(12,50,111,0.35)'
       ].join(';');
 
       const card = document.createElement('div');
       card.style.cssText = [
         'display:flex',
         'align-items:center',
-        'gap:18px',
-        'padding:18px 22px',
-        'border-radius:24px',
-        'background:linear-gradient(135deg, rgba(255,255,255,0.88), rgba(240,249,255,0.94))',
-        'border:1px solid rgba(186,230,253,0.9)',
-        'box-shadow:0 30px 70px rgba(15,23,42,0.14)',
-        'backdrop-filter:blur(18px)',
+        'gap:24px',
+        'padding:32px 40px',
+        'border-radius:32px',
+        'background:#ffffff',
+        'border-left:10px solid #FFCD07',
+        'box-shadow:0 24px 60px rgba(12,50,111,0.25)',
         'transform:translateY(12px) scale(0.96)',
         'opacity:0',
         'transition:opacity 180ms ease, transform 220ms ease',
-        'font-family:Arial,sans-serif',
-        'max-width:min(560px, calc(100vw - 36px))'
+        'font-family:\"Public Sans\",\"Segoe UI\",system-ui,Arial,sans-serif',
+        'max-width:min(760px, calc(100vw - 48px))'
       ].join(';');
 
       const icon = document.createElement('div');
@@ -501,26 +503,25 @@ const NAVIGATION_SCRIPT = `
         'display:flex',
         'align-items:center',
         'justify-content:center',
-        'width:56px',
-        'height:56px',
+        'width:76px',
+        'height:76px',
         'border-radius:999px',
-        'background:linear-gradient(135deg, #0ea5e9, #2563eb)',
-        'box-shadow:0 0 0 6px rgba(186,230,253,0.42), 0 14px 34px rgba(37,99,235,0.24)',
+        'background:#1351B4',
         'color:#fff',
         'flex-shrink:0'
       ].join(';');
-      icon.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 5 7 7-7 7"></path></svg>';
+      icon.innerHTML = '<svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 5 7 7-7 7"></path></svg>';
 
       const textWrap = document.createElement('div');
-      textWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+      textWrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
 
       const title = document.createElement('strong');
       title.id = 'lpx-assistant-transition-title';
-      title.style.cssText = 'font-size:22px;color:#0f172a;line-height:1.15;';
+      title.style.cssText = 'font-size:32px;font-weight:900;color:#0C326F;line-height:1.15;';
 
       const subtitle = document.createElement('span');
       subtitle.id = 'lpx-assistant-transition-subtitle';
-      subtitle.style.cssText = 'font-size:16px;color:#475569;line-height:1.45;';
+      subtitle.style.cssText = 'font-size:22px;color:#555F6D;line-height:1.4;';
 
       textWrap.appendChild(title);
       textWrap.appendChild(subtitle);
@@ -579,7 +580,7 @@ const NAVIGATION_SCRIPT = `
           kind: 'internal',
           path: '/#/vagas',
           title: 'Abrindo vagas',
-          subtitle: 'Voce sera direcionado para consultar as oportunidades disponiveis.'
+          subtitle: 'Mostrando as oportunidades desta semana.'
         };
       }
 
@@ -592,7 +593,7 @@ const NAVIGATION_SCRIPT = `
           href: 'https://servicos.mte.gov.br/spme-v2/#/login',
           target: '_blank',
           title: 'Abrindo Carteira Digital',
-          subtitle: 'Vou encaminhar voce para o portal oficial do Gov.br.'
+          subtitle: 'Vou abrir o portal oficial do gov.br.'
         };
       }
 
@@ -603,16 +604,16 @@ const NAVIGATION_SCRIPT = `
         return {
           kind: 'internal',
           path: '/#/curriculo-rapido',
-          title: 'Abrindo curriculo rapido',
-          subtitle: 'Voce podera preencher seus dados e gerar o curriculo em instantes.'
+          title: 'Abrindo currículo rápido',
+          subtitle: 'Preencha seus dados e imprima o currículo na hora.'
         };
       }
 
       if (normalized === 'voltar ao inicio') {
         return {
           kind: 'home',
-          title: 'Voltando ao inicio',
-          subtitle: 'Estou retornando para a tela principal do totem.'
+          title: 'Voltando ao início',
+          subtitle: 'Voltando para a tela principal do totem.'
         };
       }
 
@@ -629,7 +630,7 @@ const NAVIGATION_SCRIPT = `
         return {
           kind: 'dismiss',
           title: 'Tudo bem',
-          subtitle: 'Quando quiser, posso ajudar voce a acessar outra area do totem.'
+          subtitle: 'Quando quiser, é só tocar em outro serviço.'
         };
       }
 
